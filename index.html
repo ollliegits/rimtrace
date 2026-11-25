@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RimTrace – PoC Stufe 1</title>
+  </head>
+  <body>
+    <header>
+      <h1>RimTrace <small>PoC Stufe 1 · synthetischer Feed „ideal“</small></h1>
+      <div class="controls">
+        <button id="toggle">Pause</button>
+        <button id="reset">Zurücksetzen</button>
+        <label>Tempo
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="2">2×</option>
+            <option value="4" selected>4×</option>
+            <option value="8">8×</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <main>
+      <canvas id="view"></canvas>
+
+      <section class="grid">
+        <div id="values" class="card"></div>
+        <div class="card">
+          <h2>Top-3-Maßnahmen</h2>
+          <ol id="actions"></ol>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="card"><h2>Seitenschlag (mm)</h2><div id="chartLat"></div></div>
+        <div class="card"><h2>Höhenschlag (mm)</h2><div id="chartH"></div></div>
+      </section>
+    </main>
+    <script type="module" src="/src/app/main.ts"></script>
+  </body>
+</html>

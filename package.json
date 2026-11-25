@@ -1,0 +1,25 @@
+{
+  "name": "rimtrace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Webapp-PoC: kontinuierliche Seiten- und Höhenschlagmessung beim Zentrieren eines MTB-Hinterrads",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  },
+  "dependencies": {
+    "uplot": "^1.6.32"
+  }
+}
