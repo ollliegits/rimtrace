@@ -59,31 +59,53 @@ export function bracketMarks(marks: Mark[], xRead: number, pitchPx: number): Bra
 
 /**
  * Verfolgt die Speichenposition φ (in Speichen, 0 = Doppelmarke am Ventil).
- * Zwischen zwei Bildern wird die Differenz von f um ganze Marken korrigiert (< ½ Speiche pro Bild);
- * sichtbar wird die Doppelmarke zum Verankern des Nullpunkts genutzt.
+ * Zwischen zwei Bildern wird die Differenz von f um ganze Marken korrigiert; das ist nur eindeutig,
+ * solange sich das Rad um weniger als ½ Speiche pro Bild dreht. Ab `maxStep` gilt das Bild als zu schnell:
+ * es wird verworfen und die Position gilt als verloren, bis die Doppelmarke sie neu verankert.
  */
 export class PhaseTracker {
   private u = 0;
   private lastF: number | undefined;
   private offset: number | undefined;
+  private hold = 0;
 
-  constructor(private readonly spokes: number) {}
+  /**
+   * Oberhalb von ½ Speiche/Bild erscheint die Drehung als kleiner Rückwärtsschritt und ist nicht erkennbar; nur die Rampe
+   * dorthin wird gemeldet. Nach einer Meldung wird deshalb `holdFrames` lang nicht neu verankert (sonst im Plateau falsch).
+   */
+  constructor(
+    private readonly spokes: number,
+    private readonly maxStep = 0.4,
+    private readonly holdFrames = 30,
+  ) {}
 
   reset(): void {
     this.lastF = undefined;
     this.offset = undefined;
+    this.hold = 0;
     this.u = 0;
   }
 
-  /** φ in [0, spokes) oder undefined, solange der Nullpunkt noch nicht gesehen wurde. */
-  update(br: Bracket | null): number | undefined {
-    if (!br) return undefined;
+  /** φ in [0, spokes) oder undefined, solange die Position unbekannt ist (kein Nullpunkt gesehen oder verloren). */
+  update(br: Bracket | null): { phi?: number; tooFast: boolean } {
+    if (!br) return { tooFast: false };
+    let tooFast = false;
     if (this.lastF === undefined) this.u = br.f;
     else {
       const d = br.f - this.lastF;
-      this.u += d - Math.round(d);
+      const step = d - Math.round(d);
+      if (Math.abs(step) > this.maxStep) {
+        tooFast = true;
+        this.offset = undefined;
+        this.hold = this.holdFrames;
+      } else this.u += step;
     }
     this.lastF = br.f;
+    if (tooFast) return { tooFast };
+    if (this.hold > 0) {
+      this.hold--;
+      return { tooFast };
+    }
 
     // b hat Index k, a hat k+1: φ = k + f. Doppelmarke als b → k = 0, als a → k = -1 (mod spokes).
     if (br.b.double || br.a.double) {
@@ -92,8 +114,8 @@ export class PhaseTracker {
       const n = this.offset === undefined ? 0 : Math.round((this.u + this.offset - abs) / this.spokes);
       this.offset = this.spokes * n + abs - this.u;
     }
-    if (this.offset === undefined) return undefined;
+    if (this.offset === undefined) return { tooFast };
     const phi = (this.u + this.offset) % this.spokes;
-    return phi < 0 ? phi + this.spokes : phi;
+    return { phi: phi < 0 ? phi + this.spokes : phi, tooFast };
   }
 }

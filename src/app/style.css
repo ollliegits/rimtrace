@@ -51,3 +51,24 @@ canvas { width: 100%; background: #000; border: 1px solid #2a3340; border-radius
 .muted { color: #9aa4b2; }
 
 .u-legend { color: #e6ebf2; }
+
+.controls { flex-wrap: wrap; }
+.controls a { color: #4cc2ff; }
+header small { word-break: break-word; }
+input[type='file'] { max-width: 200px; font: inherit; }
+
+.warn { background: #6b2b1f; color: #ffd9cf; padding: 8px 16px; font-weight: 600; }
+.warn[hidden] { display: none; }
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #11151b;
+  color: #e6ebf2;
+  border: 1px solid #364254;
+  border-radius: 6px;
+  padding: 8px;
+  font: 12px/1.4 ui-monospace, Menlo, monospace;
+}
+textarea[readonly] { opacity: 0.6; }
+.error { color: #ff8a80; }

@@ -3,12 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RimTrace – PoC Stufe 1</title>
+    <title>RimTrace – PoC Stufe 2</title>
   </head>
   <body>
     <header>
-      <h1>RimTrace <small>PoC Stufe 1 · synthetischer Feed „ideal“</small></h1>
+      <h1>RimTrace <small>PoC Stufe 2 · <span id="status"></span></small></h1>
       <div class="controls">
+        <label>Testfall <select id="scenario"></select></label>
+        <label class="file">Videodatei <input id="file" type="file" accept="video/*" /></label>
+        <button id="record" title="Nimmt den gewählten Testfall 15 s in Echtzeit als Video auf und lädt es als Videoquelle">Testvideo aufnehmen</button>
+        <a id="download" hidden>Video speichern</a>
         <button id="toggle">Pause</button>
         <button id="reset">Zurücksetzen</button>
         <label>Tempo
@@ -22,6 +26,8 @@
       </div>
     </header>
 
+    <div id="warn" class="warn" hidden>Rad dreht zu schnell (mehr als ½ Speiche pro Bild): Bilder verworfen, Position verloren. Langsamer drehen.</div>
+
     <main>
       <canvas id="view"></canvas>
 
@@ -31,6 +37,13 @@
           <h2>Top-3-Maßnahmen</h2>
           <ol id="actions"></ol>
         </div>
+      </section>
+
+      <section class="card">
+        <h2>Messbereiche (Setup, JSON)</h2>
+        <p id="setupInfo" class="muted"></p>
+        <textarea id="setupText" spellcheck="false" rows="14"></textarea>
+        <p><button id="setupDefault">Standard</button> <span id="setupMsg"></span></p>
       </section>
 
       <section class="grid">

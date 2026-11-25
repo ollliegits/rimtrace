@@ -27,6 +27,7 @@ export function createRunoutChart(el: HTMLElement, spokes: number, unit: string)
     el,
   );
   return {
+    spokes,
     update(measured: number[], truth: number[]) {
       plot.setData([x, nullable(measured), nullable(truth)] as uPlot.AlignedData);
     },

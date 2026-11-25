@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSetup, findEdges, recommend, spokeSide, type SpokeProfile } from '../src/core';
+import { defaultSetup, findEdges, parseSetup, recommend, spokeSide, type SpokeProfile } from '../src/core';
 
 describe('findEdges', () => {
   it('liefert Subpixel-Position einer antialiasten Stufe', () => {
@@ -36,5 +36,20 @@ describe('recommend (Faustregel)', () => {
     p.height[5] = 0.1;
     const a = recommend(p, s);
     expect(a.map((x) => [x.spoke, x.verb])).toEqual([[1, 'tighten'], [2, 'loosen']]);
+  });
+});
+
+describe('parseSetup', () => {
+  it('ergänzt ein teilweises Setup um die Standardwerte', () => {
+    const s = parseSetup('{"xRead": 500, "flankRows": [10, 20]}');
+    expect(s.xRead).toBe(500);
+    expect(s.flankRows).toEqual([10, 20]);
+    expect(s.refX).toBe(defaultSetup.refX);
+  });
+
+  it('weist unbekannte Felder und falsche Typen ab', () => {
+    expect(() => parseSetup('{"xRead2": 1}')).toThrow(/Unbekannt/);
+    expect(() => parseSetup('{"xRead": "5"}')).toThrow(/Typ/);
+    expect(() => parseSetup('{"flankRows": [1]}')).toThrow(/Typ/);
   });
 });

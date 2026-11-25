@@ -2,7 +2,7 @@
 export interface Setup {
   width: number;
   height: number;
-  /** Nominaler Maßstab. Nur der Generator nutzt ihn; die Auswertung kalibriert sich selbst. */
+  /** Nennmaßstab, nur informativ: Die Auswertung misst den Maßstab je Bild selbst über die Felgenbreite. */
   mmPerPx: number;
 
   rimWidthMm: number;
@@ -75,4 +75,21 @@ export function spokeSide(s: Setup, spoke: number): 'left' | 'right' {
   const even = spoke % 2 === 0;
   const evenLeft = s.evenSpokeSide === 'left';
   return even === evenLeft ? 'left' : 'right';
+}
+
+/** Liest ein (teilweises) Setup aus JSON; unbekannte Felder oder falsche Typen sind Fehler. */
+export function parseSetup(text: string, base: Setup = defaultSetup): Setup {
+  const raw: unknown = JSON.parse(text);
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('Setup muss ein JSON-Objekt sein');
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(raw)) {
+    const ref = (base as unknown as Record<string, unknown>)[key];
+    if (ref === undefined) throw new Error(`Unbekanntes Feld: ${key}`);
+    const ok = Array.isArray(ref)
+      ? Array.isArray(value) && value.length === ref.length && value.every((v, i) => typeof v === typeof ref[i])
+      : typeof value === typeof ref;
+    if (!ok) throw new Error(`Falscher Typ bei ${key}`);
+    out[key] = value;
+  }
+  return out as unknown as Setup;
 }

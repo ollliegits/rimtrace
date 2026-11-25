@@ -4,8 +4,12 @@ import type { Frame, FrameSource } from './frameSource';
 export class GeneratorSource implements FrameSource {
   private gen: Generator;
 
-  constructor(private readonly scenario: ScenarioName = 'ideal') {
+  constructor(readonly scenario: ScenarioName = 'ideal') {
     this.gen = createGenerator(scenario);
+  }
+
+  get setup() {
+    return this.gen.setup;
   }
 
   get width(): number {
