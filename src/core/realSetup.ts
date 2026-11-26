@@ -64,6 +64,17 @@ export interface RealSetup {
 export function realSetupError(s: RealSetup): string | undefined {
   if (!(s.rimWidthMm > 0)) return 'rimWidthMm ist ein Pflichtfeld: Außenbreite der Felge in mm (mit Messschieber messen) eintragen';
   if (!Number.isInteger(s.spokes) || s.spokes < 2) return 'spokes muss eine ganze Zahl ≥ 2 sein';
+  const [cx, cy, cw, ch] = s.crop;
+  for (const [name, [a, b], [lo, hi]] of [
+    ['rimX', s.rimX, [cx, cx + cw]],
+    ['rimY', s.rimY, [cy, cy + ch]],
+    ['refX', s.refX, [cx, cx + cw]],
+    ['refY', s.refY, [cy, cy + ch]],
+    ['bedX', s.bedX, [cx, cx + cw]],
+    ['bedY', s.bedY, [cy, cy + ch]],
+  ] as const) {
+    if (a < lo || b > hi) return `${name} [${a}, ${b}] liegt nicht im Ausschnitt crop [${lo}, ${hi}]: Messbereich oder Ausschnitt anpassen`;
+  }
   const oneOf = (v: string, list: string[], name: string) => (list.includes(v) ? undefined : `${name} muss ${list.join(' oder ')} sein`);
   return (
     oneOf(s.marker, ['ventil', 'aufkleber'], 'marker') ??

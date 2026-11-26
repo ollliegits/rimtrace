@@ -128,6 +128,13 @@ describe('Bettverschiebung, Orientierung, Setup', () => {
     expect(realSetupError({ ...ok, spokes: 1 })).toMatch(/spokes/);
   });
 
+  it('Messbereich außerhalb des Ausschnitts → Fehlermeldung', () => {
+    const ok = { ...defaultRealSetup, rimWidthMm: 27.5 };
+    const [x, y, w, h] = ok.crop;
+    expect(realSetupError({ ...ok, refY: [y, y + h + 11] })).toMatch(/refY/);
+    expect(realSetupError({ ...ok, bedX: [x - 1, x + w] })).toMatch(/bedX/);
+  });
+
   it('Speiche 1 liegt auf der gewählten Seite; Ausgabe zählt ab 1 mit Seitennamen', () => {
     const s = { ...defaultRealSetup, rimWidthMm: 27.5, spoke1Side: 'bremse' as const, driveImageSide: 'left' as const };
     expect(spoke1ImageSide(s)).toBe('right');
