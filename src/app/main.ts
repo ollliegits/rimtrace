@@ -4,6 +4,8 @@ import {
   RealAnalyzer,
   defaultRealSetup,
   realSetupError,
+  sideName,
+  spokeSides,
   defaultSetup,
   describe,
   parseSetup,
@@ -40,7 +42,7 @@ let realSetup: RealSetup = defaultRealSetup;
 let realError: string | undefined;
 let realAnalyzer = new RealAnalyzer(defaultRealSetup);
 let lastReal: { frame: Frame; geometry?: RealGeometry } | null = null;
-let realInfo: { holesPerRev: number[]; stickers: number[] } = { holesPerRev: [], stickers: [] };
+let realInfo: { holesPerRev: number[]; markers: number[] } = { holesPerRev: [], markers: [] };
 let realSum = { lateral: 0, height: 0, n: 0, failed: 0 };
 let current: { blob: Blob; label: string; truth?: { lateral: number[]; height: number[] } } | null = null;
 let imageData: ImageData;
@@ -94,8 +96,8 @@ const synSeries: ChartSeries[] = [
 function buildCharts(spokes: number, series: ChartSeries[]): void {
   for (const id of ['chartLat', 'chartH']) $(id).innerHTML = '';
   charts = {
-    lat: createRunoutChart($('chartLat'), spokes, 'mm', series),
-    h: createRunoutChart($('chartH'), spokes, 'mm', series),
+    lat: createRunoutChart($('chartLat'), spokes, 'mm', series, real ? 1 : 0),
+    h: createRunoutChart($('chartH'), spokes, 'mm', series, real ? 1 : 0),
   };
 }
 window.addEventListener('resize', () => {
@@ -108,7 +110,7 @@ function resetMeasurement(): void {
   realAnalyzer = new RealAnalyzer(realSetup);
   lastReal = null;
   realSum = { lateral: 0, height: 0, n: 0, failed: 0 };
-  realInfo = { holesPerRev: [], stickers: [] };
+  realInfo = { holesPerRev: [], markers: [] };
   frames = 0;
   tooFastCount = 0;
   tooFastUntil = 0;
@@ -242,7 +244,7 @@ function showRealValues(): void {
   const n = realSum.n || 1;
   const lat = m?.ok ? (m.lateralPx - realSum.lateral / n) * scale : undefined;
   const hgt = m?.ok ? (m.heightPx - realSum.height / n) * scale : undefined;
-  const { holesPerRev, stickers } = realInfo;
+  const { holesPerRev, markers } = realInfo;
   $('values').innerHTML = `
     <h2>Live-Werte (relativ zum Mittelwert, mm)</h2>
     <table>
@@ -251,7 +253,7 @@ function showRealValues(): void {
       <tr><td>Höhenschlag</td><td>${signed(hgt)}</td></tr>
     </table>
     <p class="muted">Maßstab ${Number.isFinite(scale) ? (scale * 1000).toFixed(1) : '–'} µm/px · Bild ${frames} ·
-      nicht auswertbar ${realSum.failed} · Aufkleber ${stickers.length} · Löcher je Umdrehung ${holesPerRev.join(' / ') || '–'}</p>`;
+      nicht auswertbar ${realSum.failed} · Nullpunkte ${markers.length} · Löcher je Umdrehung ${holesPerRev.join(' / ') || '–'}</p>`;
 }
 
 const signed = (v: number | undefined) => (v !== undefined && Number.isFinite(v) ? (v > 0 ? '+' : '') + v.toFixed(2) : '–');
@@ -287,16 +289,16 @@ function revSeries(revs: number): ChartSeries[] {
 
 function showRealProfile(): void {
   const p = realAnalyzer.profile();
-  realInfo = { holesPerRev: p.holesPerRev, stickers: p.stickers };
+  realInfo = { holesPerRev: p.holesPerRev, markers: p.markers };
   const spokes = realSetup.spokes;
   if (charts.lat.count !== p.revolutions.length + 1 || charts.lat.spokes !== spokes) {
     buildCharts(spokes, revSeries(p.revolutions.length));
   }
   charts.lat.update([...p.revolutions.map((r) => r.lateral), p.all.lateral]);
   charts.h.update([...p.revolutions.map((r) => r.height), p.all.height]);
-  const actions = recommend(p.all, realSetup);
+  const actions = recommend(p.all, spokeSides(realSetup), { toleranceMm: realSetup.toleranceLateralMm, toleranceHeightMm: realSetup.toleranceHeightMm });
   $('actions').innerHTML = actions.length
-    ? actions.map((a) => `<li class="${a.verb}"><b>${describe(a)}</b></li>`).join('')
+    ? actions.map((a) => `<li class="${a.verb}"><b>${describe(a, { firstSpoke: 1, sideName: (x) => sideName(realSetup, x) })}</b></li>`).join('')
     : '<li class="muted">noch keine Daten bzw. alles innerhalb der Toleranz</li>';
   lastProfileFrame = frames;
 }

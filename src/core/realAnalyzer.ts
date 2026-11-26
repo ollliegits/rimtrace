@@ -1,6 +1,8 @@
 import { centered, median, type SpokeProfile } from './aggregate';
+import { bedProfile, bedShift } from './bedShift';
 import { HoleDetector, type DipEvent } from './holes';
 import { levels, meanRows, type Gray } from './image';
+import { numberHoles, type NumEvent, type Numbering } from './numbering';
 import type { RealSetup } from './realSetup';
 import { bottomEdge, flanks, lastDarkRow, topEdge } from './silhouette';
 
@@ -36,21 +38,46 @@ export interface RealProfile {
   /** Profil je Umdrehung (jeweils zentriert) und über alle Umdrehungen. */
   revolutions: SpokeProfile[];
   all: SpokeProfile;
-  /** Gefundene Löcher je Umdrehung (Soll: Speichenzahl) und Bildnummern der Aufkleber. */
+  /** Verschiedene Löcher je Umdrehung (Soll: Speichenzahl) und Bildnummern der Nullpunkte (Ventil bzw. Aufkleber). */
   holesPerRev: number[];
-  stickers: number[];
+  markers: number[];
 }
 
-interface Hole {
-  frame: number;
-  rev: number;
-  k: number;
+/** Prüfergebnis der Messung: `messages` leer heißt, die Messung ist plausibel. */
+export interface RealCheck {
+  ok: boolean;
+  messages: string[];
+  fullRevolutions: number;
+  /** Mittlere/größte Abweichung zwischen aufeinanderfolgenden vollen Umdrehungen (mm, beide Achsen). */
+  agreeMeanMm: number;
+  agreeMaxMm: number;
+  /** Kleinster Bildabstand zwischen zwei Löchern. */
+  minHoleGap: number;
+  tooFast: boolean;
+  discardedFrames: number;
 }
+
+export interface RealResult {
+  profile: RealProfile;
+  check: RealCheck;
+  frames: number;
+  /** Anzahl und Größenverhältnis erkannter Ventillöcher (leer bei Aufkleber). */
+  valveRatios: number[];
+}
+
+/** Zwischen zwei Löchern brauchen die Bilder mindestens so viele Bilder, sonst ist die Drehung zu schnell. */
+export const minGapFrames = 3;
 
 /** Auswertung echter Aufnahmen; erwartet je Bild den Ausschnitt `setup.crop` als Graustufen. */
 export class RealAnalyzer {
   readonly measures: RealMeasure[] = [];
   readonly events: DipEvent[] = [];
+  readonly numEvents: NumEvent[] = [];
+  /** Bettverschiebung je Bild in Fahrtrichtung (px), NaN wenn nicht bestimmbar. */
+  readonly shifts: number[] = [];
+  private bed: Float32Array | undefined;
+  private lastDir = 1;
+  private lastSpeed = 1;
   private readonly detector: HoleDetector;
   private frame = 0;
   private readonly ox: number;
@@ -70,6 +97,10 @@ export class RealAnalyzer {
   reset(): void {
     this.measures.length = 0;
     this.events.length = 0;
+    this.numEvents.length = 0;
+    this.shifts.length = 0;
+    this.bed = undefined;
+    this.lastDir = 1;
     this.frame = 0;
     this.detector.reset();
   }
@@ -79,6 +110,7 @@ export class RealAnalyzer {
     const { ox, oy } = this;
     const frame = this.frame++;
     const fail = { measure: { frame, ok: false, widthPx: NaN, lateralPx: NaN, heightPx: NaN, tiltPx: NaN } };
+    this.trackBed(img);
 
     const { lo, hi } = levels(img);
     if (hi - lo < 60) return this.store(fail);
@@ -108,8 +140,8 @@ export class RealAnalyzer {
     if (wx < 0 || wy < 0 || wx + size > img.width || wy + size > img.height) return this.store(fail);
     let sum = 0;
     for (let y = wy; y < wy + size; y++) for (let x = wx; x < wx + size; x++) sum += img.data[y * img.width + x];
-    const event = this.detector.push(frame, sum / (size * size));
-    if (event) this.events.push(event);
+    const event = this.detector.push(frame, sum / (size * size), this.speed(frame));
+    if (event) this.addEvent(event);
 
     const measure: RealMeasure = {
       frame,
@@ -134,6 +166,39 @@ export class RealAnalyzer {
         holeWindow: [wx + ox, wy + oy, size],
       },
     });
+  }
+
+  private trackBed(img: Gray): void {
+    const s = this.setup;
+    const cur = bedProfile(img, s.bedX[0] - this.ox, s.bedX[1] - this.ox, s.bedY[0] - this.oy, s.bedY[1] - this.oy);
+    const d = this.bed ? bedShift(this.bed, cur, s.bedMaxShift) : NaN;
+    this.bed = cur;
+    this.shifts.push(s.travel === 'down' ? d : -d);
+  }
+
+  /** Bettweg des Bildes in px; bei unbestimmbarer Verschiebung der letzte bekannte Wert. */
+  private speed(frame: number): number {
+    const d = this.shifts[frame];
+    if (Number.isFinite(d)) this.lastSpeed = Math.abs(d);
+    return this.lastSpeed;
+  }
+
+  /** Richtung und Größe aus dem Bettweg während des Ereignisses. */
+  private addEvent(e: DipEvent): void {
+    this.events.push(e);
+    let net = 0;
+    let path = 0;
+    for (let f = e.start; f <= e.end; f++) {
+      const d = this.shifts[f];
+      if (Number.isFinite(d)) {
+        net += d;
+        path += Math.abs(d);
+      }
+    }
+    // Kehrt das Bett im Fenster um, ist der Nettoweg klein gegen den zurückgelegten Weg: kein Durchgang.
+    const dir = path === 0 ? this.lastDir : Math.abs(net) < 0.5 * path ? 0 : Math.sign(net);
+    if (dir !== 0) this.lastDir = dir;
+    this.numEvents.push({ kind: e.kind, frame: e.frame, dir, size: e.area });
   }
 
   private store<T extends { measure: RealMeasure }>(r: T): T {
@@ -171,36 +236,16 @@ export class RealAnalyzer {
     return w.length ? this.setup.rimWidthMm / median(w) : NaN;
   }
 
-  /**
-   * Löcher mit Umdrehung und Nummer; Nummer 0 ist das erste Loch nach dem Aufkleber.
-   * Löcher vor dem ersten Aufkleber (Umdrehung 0) werden rückwärts vom Aufkleber aus nummeriert.
-   * Der Aufkleber erscheint als zwei helle Flecken mit einem Loch dazwischen; ein Fleck mit weniger als zwei Löchern
-   * Abstand zum vorigen gehört zum selben Aufkleber.
-   */
-  sequence(): { holes: Hole[]; stickers: number[] } {
-    const { spokes } = this.setup;
-    const pre: number[] = [];
-    const holes: Hole[] = [];
-    const stickers: number[] = [];
-    let k = 0;
-    for (const e of this.events) {
-      if (e.kind === 'sticker') {
-        if (stickers.length && k < 2) continue;
-        stickers.push(e.frame);
-        k = 0;
-      } else if (!stickers.length) pre.push(e.frame);
-      else if (k < spokes) holes.push({ frame: e.frame, rev: stickers.length, k: k++ });
-    }
-    if (!stickers.length) return { holes: [], stickers };
-    const head = pre.slice(-spokes).map((frame, i, a) => ({ frame, rev: 0, k: spokes - a.length + i }));
-    return { holes: [...head, ...holes], stickers };
+  numbering(): Numbering {
+    const { marker, spokes, valveRatio } = this.setup;
+    return numberHoles(this.numEvents, { marker, spokes, valveRatio });
   }
 
-  profile(): RealProfile {
+  profile(numbering = this.numbering()): RealProfile {
     const { spokes, binHalfWidth } = this.setup;
     const scale = this.scale();
-    const { holes, stickers } = this.sequence();
-    const revs = holes.length ? holes[holes.length - 1].rev + 1 : 0;
+    const { holes, markers } = numbering;
+    const revs = holes.length ? Math.max(...holes.map((h) => h.rev)) + 1 : 0;
     const bins = (n: number) => Array.from({ length: n }, () => Array.from({ length: spokes }, () => [] as number[]));
     const lat = bins(revs);
     const hei = bins(revs);
@@ -212,6 +257,8 @@ export class RealAnalyzer {
       const a = holes[i];
       const b = holes[i + 1];
       if (m.frame < a.frame || m.frame >= b.frame) continue;
+      // Nur Abschnitte zwischen benachbarten Löchern in einer Richtung sind zuordenbar.
+      if (a.dir !== b.dir || b.ord - a.ord !== a.dir) continue;
       const d = (m.frame - a.frame) / (b.frame - a.frame);
       const h = d <= binHalfWidth ? a : d >= 1 - binHalfWidth ? b : undefined;
       if (!h) continue;
@@ -229,8 +276,54 @@ export class RealAnalyzer {
       scale,
       revolutions: lat.map((l, r) => toProfile(l, hei[r])),
       all: toProfile(merge(lat), merge(hei)),
-      holesPerRev: Array.from({ length: revs }, (_, r) => holes.filter((h) => h.rev === r).length),
-      stickers,
+      holesPerRev: Array.from({ length: revs }, (_, r) => new Set(holes.filter((h) => h.rev === r).map((h) => h.ord)).size),
+      markers,
+    };
+  }
+
+  /** Ergebnis mit Plausibilitätsprüfung (M7). */
+  result(): RealResult {
+    const { spokes, agreeMeanMm, agreeMaxMm } = this.setup;
+    const numbering = this.numbering();
+    const profile = this.profile(numbering);
+    const messages: string[] = [];
+    const per = profile.holesPerRev;
+    // Die letzte Umdrehung ist meist unvollständig, die erste (vor dem Nullpunkt) ebenso.
+    const full = per.map((n, r) => ({ n, r })).filter((x) => x.n === spokes).map((x) => x.r);
+    if (!numbering.markers.length) messages.push(`kein Nullpunkt (${this.setup.marker}) erkannt`);
+    if (full.length < 2) messages.push(`nur ${full.length} volle Umdrehung(en), mindestens 2 nötig`);
+    for (let r = 1; r < per.length - 1; r++) {
+      if (per[r] !== spokes) messages.push(`Umdrehung ${r} hat ${per[r]} statt ${spokes} Löcher`);
+    }
+
+    const diffs: number[] = [];
+    for (let i = 1; i < full.length; i++) {
+      const a = profile.revolutions[full[i - 1]];
+      const b = profile.revolutions[full[i]];
+      for (const axis of ['lateral', 'height'] as const) {
+        a[axis].forEach((v, k) => Number.isFinite(v) && Number.isFinite(b[axis][k]) && diffs.push(Math.abs(v - b[axis][k])));
+      }
+    }
+    const agreeMean = diffs.length ? diffs.reduce((x, y) => x + y, 0) / diffs.length : NaN;
+    const agreeMax = diffs.length ? Math.max(...diffs) : NaN;
+    if (agreeMean > agreeMeanMm || agreeMax > agreeMaxMm) {
+      messages.push(`Umdrehungen weichen voneinander ab (mittlere ${agreeMean.toFixed(2)} mm, größte ${agreeMax.toFixed(2)} mm)`);
+    }
+
+    const frames = numbering.holes.map((h) => h.frame).sort((a, b) => a - b);
+    let minGap = Infinity;
+    for (let i = 1; i < frames.length; i++) minGap = Math.min(minGap, frames[i] - frames[i - 1]);
+    const tooFast = minGap < minGapFrames;
+    if (tooFast) messages.push(`Drehung zu schnell (nur ${minGap.toFixed(1)} Bilder zwischen zwei Löchern, mindestens ${minGapFrames})`);
+
+    const discarded = this.measures.filter((m) => !m.ok).length;
+    if (discarded > 0.05 * this.measures.length) messages.push(`${discarded} von ${this.measures.length} Bildern nicht auswertbar`);
+    if (numbering.ignored) messages.push(`${numbering.ignored} Ereignis(se) ohne Durchgang (Umkehr im Lochfenster)`);
+    return {
+      profile,
+      check: { ok: !messages.length, messages, fullRevolutions: full.length, agreeMeanMm: agreeMean, agreeMaxMm: agreeMax, minHoleGap: minGap, tooFast, discardedFrames: discarded },
+      frames: this.measures.length,
+      valveRatios: numbering.valveRatios,
     };
   }
 }

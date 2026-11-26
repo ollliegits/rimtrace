@@ -3,60 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RimTrace – PoC Stufe 3</title>
+    <title>RimTrace</title>
   </head>
   <body>
-    <header>
-      <h1>RimTrace <small>PoC Stufe 3 · <span id="status"></span></small></h1>
-      <div class="controls">
-        <label>Testfall <select id="scenario"></select></label>
-        <label>Auswertung
-          <select id="path">
-            <option value="real" selected>echte Aufnahme</option>
-            <option value="synthetic">synthetisch</option>
-          </select>
-        </label>
-        <label class="file">Videodatei <input id="file" type="file" accept="video/*" /></label>
-        <button id="record" title="Nimmt den gewählten Testfall 15 s in Echtzeit als Video auf und lädt es als Videoquelle">Testvideo aufnehmen</button>
-        <a id="download" hidden>Video speichern</a>
-        <button id="toggle">Pause</button>
-        <button id="reset">Zurücksetzen</button>
-        <label>Tempo
-          <select id="speed">
-            <option value="1">1×</option>
-            <option value="2">2×</option>
-            <option value="4" selected>4×</option>
-            <option value="8">8×</option>
-          </select>
-        </label>
-      </div>
-    </header>
-
-    <div id="warn" class="warn" hidden>Rad dreht zu schnell (mehr als ½ Speiche pro Bild): Bilder verworfen, Position verloren. Langsamer drehen.</div>
-
+    <header><h1>RimTrace <small>Seiten- und Höhenschlag beim Zentrieren</small></h1></header>
     <main>
-      <canvas id="view"></canvas>
-
-      <section class="grid">
-        <div id="values" class="card"></div>
-        <div class="card">
-          <h2>Top-3-Maßnahmen</h2>
-          <ol id="actions"></ol>
-        </div>
-      </section>
-
       <section class="card">
-        <h2>Messbereiche (Setup, JSON)</h2>
-        <p id="setupInfo" class="muted"></p>
-        <textarea id="setupText" spellcheck="false" rows="14"></textarea>
-        <p><button id="setupDefault">Standard</button> <span id="setupMsg"></span></p>
-      </section>
-
-      <section class="grid">
-        <div class="card"><h2>Seitenschlag (mm)</h2><div id="chartLat"></div></div>
-        <div class="card"><h2>Höhenschlag (mm)</h2><div id="chartH"></div></div>
+        <h2>Rolle wählen</h2>
+        <p><a href="./control.html"><b>Steuerung</b></a> – am Notebook: koppeln, konfigurieren, Messung starten, Ergebnis ansehen.</p>
+        <p><a href="./camera.html"><b>Kamera</b></a> – am iPhone: Kamera und Auswertung, wird von der Steuerung bedient.</p>
+        <p><a href="./dev.html"><b>Entwickler</b></a> – Generator, Testvideos und Videodateien ohne Kopplung.</p>
+        <p class="muted">Beide Geräte brauchen dieselbe Adresse (HTTPS) und dasselbe WLAN. Die Seite sendet nichts an einen Server; das Video bleibt auf dem Handy.</p>
       </section>
     </main>
-    <script type="module" src="/src/app/main.ts"></script>
   </body>
 </html>

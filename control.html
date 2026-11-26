@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RimTrace – Steuerung</title>
+  </head>
+  <body>
+    <header>
+      <h1>RimTrace <small>Steuerung (Notebook) · <span id="link">nicht gekoppelt</span></small></h1>
+      <a href="./">Start</a>
+    </header>
+    <div id="warn" class="warn" hidden></div>
+    <main>
+      <section class="card" id="pairing">
+        <h2>1 · Kopplung</h2>
+        <p class="muted">Das Handy muss im selben WLAN sein. Webcam freigeben, damit der Browser echte Adressen statt anonymisierter Namen verwendet.</p>
+        <p><button id="pair">Kopplung starten</button> <button id="relink" hidden>Neu koppeln</button> <span id="pairMsg" class="muted"></span></p>
+        <div class="grid" id="pairBox" hidden>
+          <div>
+            <p><b>A</b> · Diesen QR am Handy (Seite „Kamera“) scannen:</p>
+            <canvas id="offerQr" style="width: 300px"></canvas>
+            <p id="offerInfo" class="muted"></p>
+            <textarea id="offerOut" rows="3" readonly></textarea>
+          </div>
+          <div>
+            <p><b>B</b> · Antwort-QR des Handys vor die Webcam halten:</p>
+            <video id="cam" playsinline muted style="width: 300px; border-radius: 6px"></video>
+            <textarea id="answerIn" rows="3" spellcheck="false" placeholder="oder Antwort-Code einfügen"></textarea>
+            <p><button id="answerApply">Antwort übernehmen</button></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2 · Konfiguration</h2>
+        <div class="cols" id="form">
+          <label>Speichenzahl <input id="spokes" type="number" min="2" step="1" /></label>
+          <label>Felgenbreite außen (mm, Pflicht) <input id="rimWidthMm" type="number" min="0" step="0.1" /></label>
+          <label>Nullpunkt
+            <select id="marker"><option value="ventil">Ventilloch</option><option value="aufkleber">Aufkleber (Testvideos)</option></select>
+          </label>
+          <label>Speiche 1 liegt auf
+            <select id="spoke1Side"><option value="antrieb">Antriebsseite</option><option value="bremse">Bremsscheibenseite</option></select>
+          </label>
+          <label>Antriebsseite im Bild
+            <select id="driveImageSide"><option value="left">links</option><option value="right">rechts</option></select>
+          </label>
+          <label>Felgenbett läuft bei Vorwärtsdrehen
+            <select id="travel"><option value="down">nach unten</option><option value="up">nach oben</option></select>
+          </label>
+          <label>Bild drehen (Grad, im Uhrzeigersinn)
+            <select id="rotate"><option>0</option><option>90</option><option>180</option><option>270</option></select>
+          </label>
+          <label>Bild spiegeln <input id="mirror" type="checkbox" /></label>
+          <label>Toleranz Seite (mm) <input id="toleranceLateralMm" type="number" min="0" step="0.05" /></label>
+          <label>Toleranz Höhe (mm) <input id="toleranceHeightMm" type="number" min="0" step="0.05" /></label>
+        </div>
+        <details open>
+          <summary>Messbereiche (JSON, Pixel im gedrehten Bild)</summary>
+          <textarea id="areas" rows="16" spellcheck="false"></textarea>
+        </details>
+        <p><button id="apply">Übernehmen und senden</button> <button id="defaults">Standardbereiche</button> <span id="cfgMsg"></span></p>
+      </section>
+
+      <section class="card">
+        <h2>3 · Standbild und Messbereiche</h2>
+        <p><button id="snap">Standbild vom Handy holen</button> <span id="snapMsg" class="muted"></span></p>
+        <canvas id="snapView"></canvas>
+        <p class="muted">Rot: Ausschnitt · Gelb: Felge · Grün: Referenz · Blau: Bettstreifen. Zahlen aus dem Bild ablesen und in die Bereiche eintragen.</p>
+      </section>
+
+      <section class="card">
+        <h2>4 · Messung</h2>
+        <p><button id="start">Start</button> <button id="stop">Stopp</button> <span id="runMsg" class="muted"></span></p>
+        <table><tbody id="live"></tbody></table>
+      </section>
+
+      <section class="card" id="resultCard">
+        <h2>Ergebnis <span id="resultAge" class="muted"></span></h2>
+        <div id="check"></div>
+        <div class="grid">
+          <div><h2>Seitenschlag (mm)</h2><div id="chartLat"></div></div>
+          <div><h2>Höhenschlag (mm)</h2><div id="chartH"></div></div>
+        </div>
+        <h2>Top-3-Maßnahmen</h2>
+        <ol id="actions"></ol>
+      </section>
+    </main>
+    <script type="module" src="/src/app/control.ts"></script>
+  </body>
+</html>

@@ -7,7 +7,7 @@ Webapp-PoC (iPhone/Safari) für die **kontinuierliche Messung von Seiten- und H�
 - Drehwinkel aus der Markerspur: eine Marke pro Speiche, Doppelmarke am Ventil als Nullpunkt, linear interpoliert
 - Ergebnis: Profil je Speiche (Median über mehrere Umdrehungen) und Top-3-Maßnahmen
 
-**Stand: Stufe 3.** Zwei Analysepfade: der synthetische (Generator mit Ground Truth, Markerspur) und ein zweiter für **echte Aufnahmen** (Felge von oben im Bild, Löcher als Speichentakt, Aufkleber als Nullpunkt). Eine Kamera ist noch nicht angebunden.
+**Stand: Stufe 4 (MVP).** Zwei Analysepfade: der synthetische (Generator mit Ground Truth, Markerspur) und der für **echte Aufnahmen** (Felge von oben im Bild, Löcher als Speichentakt, Ventilloch bzw. Aufkleber als Nullpunkt). Neu: Live-Messung mit der iPhone-Kamera (Web Worker), Kopplung Handy ↔ Notebook per WebRTC mit QR-Codes ohne Vermittlungsserver, Steuerung am Notebook.
 
 ## Befehle
 
@@ -15,8 +15,11 @@ Webapp-PoC (iPhone/Safari) für die **kontinuierliche Messung von Seiten- und H�
 npm install
 npm test          # synthetisch (ideal, kamera, handdrehung, zu-schnell) und echte Videos (real-0977, real-0975, nur wenn videos/IMG_*.MOV vorhanden)
 npm run dev       # Web-Oberfläche auf http://localhost:5173
-npm run build     # Typprüfung + Produktions-Build
+npm run dev:https # HTTPS mit selbstsigniertem Zertifikat, im WLAN erreichbar (--host), für das iPhone
+npm run build     # Typprüfung + Produktions-Build (BASE_PATH=/unterpfad/ setzt `base`, Standard ./)
 ```
+
+Seiten: `index.html` (Rollenwahl), `control.html` (Steuerung, Notebook), `camera.html` (Kamera, iPhone), `dev.html` (Entwicklerseite: Generator, Videodatei).
 
 ## Aufbau
 
@@ -32,12 +35,23 @@ src/core/       reine Funktionen auf Graustufenbildern (Uint8Array + Breite/Höh
   silhouette.ts   Flanken, Hornspitzen, Oberkanten mit Subpixel-Genauigkeit (echte Aufnahmen)
   holes.ts        Loch- und Aufkleber-Erkennung aus der Helligkeit eines Fensters
   realSetup.ts    Setup für echte Aufnahmen (Pixel im Videobild)
-  realAnalyzer.ts Auswertung echter Aufnahmen: Bild für Bild, danach Profil je Umdrehung
+  realAnalyzer.ts Auswertung echter Aufnahmen: Bild für Bild, danach Profil je Umdrehung, Prüfung (`result()`)
+  bedShift.ts     Verschiebung des Felgenbetts zwischen zwei Bildern (Drehrichtung)
+  numbering.ts    Nummerierung 1…N ab Nullpunkt, Nettozählung mit Richtung
+  orientation.ts  Bild drehen/spiegeln (Canvas-Matrix und CPU-Variante)
+  session.ts      Messsitzung (Bilder, Rechenzeit, Status) für den Worker
+  protocol.ts     Nachrichten Handy ↔ Notebook, Prüfung, Standbild in Teilen
+  sdp.ts          SDP auf einen kurzen Code (ca. 100 Zeichen) verkleinern und wiederherstellen
 src/generator/  deterministischer Testvideo-Generator (Seed) mit Ground Truth je Bild
   render.ts       Szene mit wahrem Maßstab, analytische Gauß-Unschärfe
   noise.ts        normalverteiltes Bildrauschen (Seed)
   rotation.ts     Handdrehung: schwankende Geschwindigkeit, Stopps, Zurückdrehen (Seed)
-src/app/        Web-Oberfläche (Canvas, Live-Werte, uPlot-Diagramme, Setup-Editor); FrameSource als Schnittstelle
+src/app/        Web-Oberfläche; FrameSource als Schnittstelle
+  control.ts      Steuerung: Kopplung, Konfiguration, Standbild mit Overlay, Start/Stopp, Ergebnis
+  camera.ts       Kamera-Rolle: CameraSource, Worker, Kopplung, Diagnoseanzeige
+  analysis.worker.ts Auswertung im Web Worker; cameraSource.ts getUserMedia → Graustufen-Ausschnitt
+  rtc/            link.ts (RTCPeerConnection ohne ICE-Server, Datenkanal), qr.ts (QR zeichnen/scannen)
+  main.ts         Entwicklerseite (Canvas, Live-Werte, Setup-Editor)
 test/           Vitest; support/videoReader.ts liest Videos in Node über ffmpeg-static, real/*.json ist das Setup je Video
 ```
 
@@ -74,7 +88,29 @@ Aufbau der Aufnahme: Hochformat, Felge hängt von oben ins Bild, helle Fläche d
 
 **Bedienung:** `npm run dev`, „Auswertung: echte Aufnahme“ wählen, Videodatei laden (die Standardwerte passen zu `IMG_0977`, dazu `rimWidthMm` eintragen). Das Setup-JSON darunter enthält alle Messbereiche in Videopixeln; das Overlay (Flankenzeilen, Hornspitzen, Referenz, Lochfenster) folgt der Eingabe live, gespeichert wird im `localStorage` (`rimtrace.realsetup.v1`). Teil-JSON ergänzt die Standardwerte (außer `rimWidthMm`, das immer eingetragen werden muss; solange es fehlt, wird nicht ausgewertet), `spokes` (Standard 28) stellt die Speichenzahl ein. Eine Änderung von `crop` startet das Video neu, andere Änderungen werten ab dem nächsten Bild neu aus („Zurücksetzen“ startet von vorn). Für jedes Video braucht es eigene Messbereiche; Beispiele in `test/real/*.json`. Videos liegen in `videos/` (nicht eingecheckt); die `real-*`-Tests überspringen sich ohne Datei.
 
-Grenzen: Messbereiche manuell; Rückwärtsdrehen wird nicht erkannt; die Felgenbreite `rimWidthMm` bestimmt den Maßstab und damit alle mm-Werte; sie ist ein Pflichtfeld ohne Standardwert (Testvideos: 27,5 mm, mit dem Messschieber gemessen, in `test/real/*.json`).
+Grenzen: Messbereiche manuell (JSON, mit Standbild-Overlay); die Felgenbreite `rimWidthMm` bestimmt den Maßstab und damit alle mm-Werte; sie ist ein Pflichtfeld ohne Standardwert (Testvideos: 27,5 mm, mit dem Messschieber gemessen, in `test/real/*.json`; dort steht auch `marker`: `aufkleber` für IMG_0977/0975, `ventil` für `ventil_01`).
+
+### Live-Messung und Kopplung (Stufe 4)
+
+Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet nur Status, Standbild und Ergebnis. Das Notebook konfiguriert und zeigt an. Der Datenkanal (WebRTC) wird ohne Server aufgebaut: Die Steuerung zeigt das Offer als QR-Code (ca. 100 Zeichen, QR-Version 6), das Handy scannt es und zeigt die Antwort als QR-Code, die die Notebook-Webcam liest. Beide Codes lassen sich auch als Text einfügen. Beide Geräte müssen im selben WLAN sein (keine Geräteisolation/Gästenetz). Die Webcam wird vor dem Offer freigegeben, weil der Browser sonst die lokale Adresse hinter einem `.local`-Namen versteckt.
+
+- **Nullpunkt:** Ventilloch (Dunkelereignis, größer als `valveRatio` × mittleres Loch; Standard 2) oder heller Aufkleber (`marker: "aufkleber"`, für die alten Testvideos). Speiche 1 ist die erste Speiche nach dem Nullpunkt in Fahrtrichtung; `spoke1Side` legt ihre Seite fest, `driveImageSide` die Antriebsseite im Bild.
+- **Drehrichtung** aus der Verschiebung des Felgenbetts im Streifen `bedX`/`bedY` (Videokoordinaten); `travel` sagt, in welche Richtung sich das Bett bei Vorwärtsdrehen bewegt. Rückwärtsdrehen zählt netto.
+- **Prüfung** des Ergebnisses: mindestens 2 volle Umdrehungen mit je N Löchern, Übereinstimmung der Umdrehungen (`agreeMeanMm`, `agreeMaxMm`), keine zu schnelle Drehung.
+- **Bild drehen/spiegeln** in der Konfiguration (`rotate`, `mirror`), damit die Felge von oben ins Bild hängt; Messbereiche gelten im gedrehten Bild.
+- Gespeichert wird im `localStorage` der Steuerung: Konfiguration (`rimtrace.control.v1`), letztes Ergebnis (`rimtrace.result.v1`). Die Kamera sendet nach einer Neukopplung ihr letztes Ergebnis erneut.
+
+**HTTPS am iPhone:** `npm run dev:https`, am Notebook `https://<IP>:5173` (Adresse steht in der Konsole), am iPhone dieselbe Adresse. Das Zertifikat ist selbstsigniert: Safari warnt, „Details“ → „Diese Website besuchen“ bestätigen. Die Kamera-Freigabe verlangt HTTPS. Alternativ GitHub Pages: `.github/workflows/pages.yml` baut mit `BASE_PATH=/<Repository>/` und wird aktiv, sobald das Repository ein Remote hat und Pages auf „GitHub Actions“ steht.
+
+**Testcheckliste (iPhone ↔ Notebook):**
+
+1. `npm run dev:https` am Notebook, `control.html` öffnen, Webcam freigeben, „Kopplung starten“.
+2. Am iPhone `camera.html` öffnen (Zertifikatswarnung bestätigen), „Kamera starten“, Kamera freigeben, „QR-Code scannen“ und den Offer-QR vom Notebook-Bildschirm lesen. Gelingt das Scannen nicht, den Code aus dem Textfeld einfügen.
+3. Den Antwort-QR vom iPhone-Bildschirm vor die Notebook-Webcam halten (oder Text einfügen). Beide Seiten zeigen „verbunden“. Notieren: Kandidatenpaar (Diagnose) und ob QR-Scan funktionierte.
+4. In der Steuerung Felgenbreite (mm), Speichenzahl, Nullpunkt, Seiten eintragen und „Übernehmen und senden“.
+5. „Standbild vom Handy holen“: Das Bild erscheint mit Overlay; Messbereiche im JSON anpassen, bis sie passen.
+6. Start, Rad mindestens 2 volle Runden in Fahrtrichtung drehen, Stopp. Ein Ergebnisdiagramm 1…N mit je einer Kurve pro Umdrehung, die Prüfung und die Top-3-Maßnahmen erscheinen.
+7. Diagnose am Handy ablesen: Auflösung und Bildrate laut `getSettings()`, gemessene Bildrate, Rechenzeit Mittel/p95, verworfene Bilder, Lochzustand, QR-Version.
 
 ### Annahmen des Generators
 
@@ -86,8 +122,9 @@ Grenzen: Messbereiche manuell; Rückwärtsdrehen wird nicht erkannt; die Felgenb
 
 1. ✅ Generator plus Auswertung `ideal`
 2. ✅ Maßstab, Rauschen/Unschärfe, Handdrehung, Videodatei-Quelle
-3. Machbarkeitstest mit echten Aufnahmen: Auswertung echter Videos in Kern und App ✅; offen: Kantenmessung mit Fühlerlehre, Abgleich der Absolutwerte ← **aktuell**
-4. Optimierung anhand der echten Aufnahmen (Kantenerkennung, Störungen im Generator realistisch einstellen)
-5. Zentrieren am echten Rad mit Halterung, Rechenmodell, Abgleich mit Messuhren
+3. ✅ Machbarkeitstest mit echten Aufnahmen: Auswertung echter Videos in Kern und App; offen: Kantenmessung mit Fühlerlehre, Abgleich der Absolutwerte
+4. MVP Stufe 4: Live-Kamera, Worker, Kopplung per QR/WebRTC, Steuerung am Notebook, Ventilloch, Nummerierung, Drehrichtung ← **aktuell** (Test am iPhone offen)
+5. Optimierung anhand der echten Aufnahmen (Kantenerkennung, Störungen im Generator realistisch einstellen)
+6. Zentrieren am echten Rad mit Halterung, Rechenmodell, Abgleich mit Messuhren
 
 Ziel-Genauigkeit am Ende: ±0,2 mm.

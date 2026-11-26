@@ -73,3 +73,16 @@ textarea {
 }
 textarea[readonly] { opacity: 0.6; }
 .error { color: #ff8a80; }
+
+#diagRows td { padding: 2px 10px 2px 0; font-variant-numeric: tabular-nums; }
+#diagRows td:first-child { color: #9aa4b2; }
+#preview video { max-width: 100%; max-height: 40vh; border-radius: 6px; }
+a { color: #4cc2ff; }
+textarea[rows='3'] { font-size: 11px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
+.cols label { display: grid; gap: 2px; color: #9aa4b2; font-size: 13px; }
+.cols input, .cols select { background: #11151b; color: #e6ebf2; border: 1px solid #364254; border-radius: 6px; padding: 5px 8px; font: inherit; }
+.cols .req { border-color: #ff8a80; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #232c38; }
+.pill.ok { background: #1f5a3a; }
+.pill.bad { background: #6b2b1f; }

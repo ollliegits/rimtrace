@@ -12,8 +12,8 @@ export interface ChartSeries {
 }
 
 /** Liniendiagramm über der Speichennummer, eine Kurve je Eintrag in `series`. */
-export function createRunoutChart(el: HTMLElement, spokes: number, unit: string, series: ChartSeries[]) {
-  const x = Array.from({ length: spokes }, (_, i) => i);
+export function createRunoutChart(el: HTMLElement, spokes: number, unit: string, series: ChartSeries[], firstSpoke = 0) {
+  const x = Array.from({ length: spokes }, (_, i) => i + firstSpoke);
   const plot = new uPlot(
     {
       width: el.clientWidth || 600,

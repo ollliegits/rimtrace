@@ -3,5 +3,7 @@
   "refX": [566, 604],
   "refY": [880, 990],
   "refLevel": 0.75,
-  "rimWidthMm": 27.5
+  "rimWidthMm": 27.5,
+  "marker": "aufkleber",
+  "travel": "down"
 }

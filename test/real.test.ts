@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { defaultRealSetup, parseSetup, RealAnalyzer, realSetupError, recommend, describe as describeAction, type RealProfile } from '../src/core';
+import { AnalysisSession, defaultRealSetup, orientCrop, parseSetup, RealAnalyzer, realSetupError, spokeSides, recommend, describe as describeAction, type RealProfile } from '../src/core';
 import { readVideoGray } from './support/videoReader';
 
 const finite = (a: number[]) => a.filter(Number.isFinite);
@@ -26,7 +26,7 @@ function table(name: string, p: RealProfile, spokes: number): string {
     lines.push(`${String(k).padStart(3)} | ${cells.join(' | ')} | ${fmt(p.all.lateral[k], 10)} ${fmt(p.all.height[k], 10)}`);
   }
   lines.push(
-    `Maßstab ${p.scale.toFixed(4)} mm/px, Aufkleber bei Bild ${p.stickers.map((s) => s.toFixed(0)).join(', ')}, Löcher je Umdrehung ${p.holesPerRev.join(', ')}`,
+    `Maßstab ${p.scale.toFixed(4)} mm/px, Nullpunkte bei Bild ${p.markers.map((s) => s.toFixed(0)).join(', ')}, Löcher je Umdrehung ${p.holesPerRev.join(', ')}`,
     `Extrem zu Extrem je Umdrehung: Seite ${p.revolutions.map((r) => span(r.lateral).toFixed(1)).join(' / ')} mm, Höhe ${p.revolutions.map((r) => span(r.height).toFixed(1)).join(' / ')} mm`,
   );
   return lines.join('\n');
@@ -46,7 +46,7 @@ describe.runIf(existsSync('videos/IMG_0977.MOV'))('real-0977: Umdrehung 1 gegen 
     console.log(
       table('real-0977', r.profile, r.setup.spokes),
       `\nU1 gegen U2: Seite mittlere Abw. ${avg(diffLat).toFixed(2)} mm, größte ${max(diffLat).toFixed(2)} mm; Höhe mittlere ${avg(diffH).toFixed(2)} mm, größte ${max(diffH).toFixed(2)} mm`,
-      `\nTop 3: ${recommend(r.profile.all, r.setup).map(describeAction).join(' | ')}`,
+      `\nTop 3: ${recommend(r.profile.all, spokeSides(r.setup)).map((a) => describeAction(a)).join(' | ')}`,
     );
   });
 
@@ -56,8 +56,30 @@ describe.runIf(existsSync('videos/IMG_0977.MOV'))('real-0977: Umdrehung 1 gegen 
   });
 
   it('findet 28 Löcher je vollständiger Umdrehung und 3 Aufkleber', () => {
-    expect(r.profile.stickers).toHaveLength(3);
+    expect(r.profile.markers).toHaveLength(3);
     expect(r.profile.holesPerRev.slice(1, 3)).toEqual([28, 28]);
+  });
+
+  it('Prüfung (M7): zwei volle Umdrehungen, plausibel, Bett läuft in Fahrtrichtung', () => {
+    const c = r.an.result().check;
+    expect(c.messages).toEqual([]);
+    expect(c.fullRevolutions).toBe(2);
+    expect(r.an.numEvents.every((e) => e.dir === 1)).toBe(true);
+  });
+
+  it('Streaming-Pfad (volle Bilder → Ausschnitt → Messsitzung) liefert dasselbe Profil', async () => {
+    const session = new AnalysisSession(r.setup);
+    const { crop, rotate, mirror } = r.setup;
+    for await (const full of readVideoGray('videos/IMG_0977.MOV', [0, 0, 1080, 1920])) {
+      session.push(orientCrop(full, rotate, mirror, crop as [number, number, number, number]));
+    }
+    const live = session.result().profile;
+    const dev = (a: number[], b: number[]) => max(a.map((v, i) => Math.abs(v - b[i])));
+    expect(live.holesPerRev).toEqual(r.profile.holesPerRev);
+    expect(dev(live.all.lateral, r.profile.all.lateral)).toBeLessThan(0.01);
+    expect(dev(live.all.height, r.profile.all.height)).toBeLessThan(0.01);
+    const st = session.status();
+    console.log(`Rechenzeit je Bild: Mittel ${st.avgMs.toFixed(2)} ms, p95 ${st.p95Ms.toFixed(2)} ms (Node, Desktop)`);
   });
 
   it('Maßstab liegt bei ca. 0,287 mm/px', () => {
@@ -101,5 +123,20 @@ describe.runIf(existsSync('videos/IMG_0975.MOV'))('real-0975: graue Referenz', (
   it('liefert ein plausibles Seitenschlag-Profil (ca. 10 mm)', () => {
     expect(span(r.profile.all.lateral)).toBeGreaterThan(6);
     expect(span(r.profile.all.lateral)).toBeLessThan(14);
+  });
+});
+
+describe.runIf(existsSync('videos/ventil_01.MOV'))('real-ventil_01: Ventilloch als Nullpunkt', () => {
+  let r: Awaited<ReturnType<typeof analyze>>;
+
+  beforeAll(async () => {
+    r = await analyze('ventil_01');
+    console.log(table('real-ventil_01', r.profile, r.setup.spokes), `\nGröße Ventil/Median: ${r.an.result().valveRatios.map((v) => v.toFixed(1)).join(', ')}`);
+  });
+
+  it('erkennt das Ventil je Umdrehung und besteht die Prüfung', () => {
+    const { check } = r.an.result();
+    expect(check.messages).toEqual([]);
+    expect(r.profile.holesPerRev.filter((n) => n === r.setup.spokes).length).toBeGreaterThanOrEqual(2);
   });
 });

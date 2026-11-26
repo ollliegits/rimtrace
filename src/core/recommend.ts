@@ -13,8 +13,9 @@ export interface Action {
 }
 
 export interface RecommendOptions {
-  /** Abweichungen darunter erzeugen keine Maßnahme. */
+  /** Abweichungen darunter erzeugen keine Maßnahme (Seite; Höhe, falls `toleranceHeightMm` fehlt). */
   toleranceMm?: number;
+  toleranceHeightMm?: number;
   count?: number;
   /** Faustwerte: Nippelumdrehungen je mm Abweichung. */
   turnsPerMm?: { lateral: number; height: number };
@@ -29,6 +30,7 @@ const defaultTurnsPerMm = { lateral: 0.5, height: 0.5 };
  */
 export function recommend(p: SpokeProfile, s: Pick<Setup, 'evenSpokeSide'>, opts: RecommendOptions = {}): Action[] {
   const { toleranceMm = 0.2, count = 3, turnsPerMm = defaultTurnsPerMm } = opts;
+  const toleranceHeight = opts.toleranceHeightMm ?? toleranceMm;
   const actions: Action[] = [];
 
   p.lateral.forEach((dev, spoke) => {
@@ -40,7 +42,7 @@ export function recommend(p: SpokeProfile, s: Pick<Setup, 'evenSpokeSide'>, opts
   });
 
   p.height.forEach((dev, spoke) => {
-    if (!Number.isFinite(dev) || Math.abs(dev) < toleranceMm) return;
+    if (!Number.isFinite(dev) || Math.abs(dev) < toleranceHeight) return;
     const verb = dev > 0 ? 'tighten' : 'loosen';
     actions.push({
       spoke,
@@ -67,12 +69,19 @@ export function formatTurns(t: number): string {
   return `${whole || ''}${frac}` || '0';
 }
 
-export function describe(a: Action): string {
-  const side = a.side === 'left' ? 'links' : 'rechts';
+export interface DescribeOptions {
+  /** Nummer der ersten Speiche in der Ausgabe (Standard 0, die App zählt ab 1). */
+  firstSpoke?: number;
+  /** Beschriftung der Seite, Standard links/rechts. */
+  sideName?: (side: 'left' | 'right') => string;
+}
+
+export function describe(a: Action, { firstSpoke = 0, sideName }: DescribeOptions = {}): string {
+  const side = sideName ? sideName(a.side) : a.side === 'left' ? 'links' : 'rechts';
   const verb = a.verb === 'tighten' ? 'anziehen' : 'lösen';
   const what =
     a.axis === 'lateral'
       ? `Seitenschlag ${a.deviationMm > 0 ? '+' : ''}${a.deviationMm.toFixed(2)} mm`
       : `Höhenschlag ${a.deviationMm > 0 ? '+' : ''}${a.deviationMm.toFixed(2)} mm`;
-  return `Speiche ${a.spoke} (${side}) ${formatTurns(a.turns)} Umdr. ${verb} – ${what}`;
+  return `Speiche ${a.spoke + firstSpoke} (${side}) ${formatTurns(a.turns)} Umdr. ${verb} – ${what}`;
 }

@@ -4,6 +4,13 @@ export interface DipEvent {
   kind: 'hole' | 'sticker';
   /** Bildnummer (Subframe-genau, Schwerpunkt des Ereignisses). */
   frame: number;
+  /** Erstes und letztes Bild des Ereignisses. */
+  start: number;
+  end: number;
+  /** Größte Abweichung von der Basis (Grauwerte, positiv). */
+  depth: number;
+  /** Summe Abweichung × Bettweg (Grauwert·px): Größe des Ereignisses, unabhängig von der Drehgeschwindigkeit. */
+  area: number;
 }
 
 export interface HoleDetectorOptions {
@@ -24,6 +31,9 @@ export class HoleDetector {
   private state: 'idle' | 'hole' | 'sticker' = 'idle';
   private sum = 0;
   private weighted = 0;
+  private start = 0;
+  private depth = 0;
+  private area = 0;
 
   constructor(private readonly o: HoleDetectorOptions) {}
 
@@ -36,7 +46,7 @@ export class HoleDetector {
     return this.history.length ? median(this.history) : NaN;
   }
 
-  push(frame: number, brightness: number): DipEvent | undefined {
+  push(frame: number, brightness: number, speed = 1): DipEvent | undefined {
     const base = this.baseline();
     this.history.push(brightness);
     if (this.history.length > this.o.baselineFrames) this.history.shift();
@@ -45,8 +55,8 @@ export class HoleDetector {
     const { drop, release, rise } = this.o;
     const dev = brightness - base;
     if (this.state === 'idle') {
-      if (dev < -drop) this.begin('hole');
-      else if (dev > rise) this.begin('sticker');
+      if (dev < -drop) this.begin('hole', frame);
+      else if (dev > rise) this.begin('sticker', frame);
       else return undefined;
     } else {
       const done = this.state === 'hole' ? dev > -release : dev < rise / 2;
@@ -54,17 +64,22 @@ export class HoleDetector {
         const kind = this.state;
         const at = this.weighted / this.sum;
         this.state = 'idle';
-        return { kind, frame: at };
+        return { kind, frame: at, start: this.start, end: frame - 1, depth: this.depth, area: this.area };
       }
     }
     const w = Math.abs(dev);
+    this.depth = Math.max(this.depth, w);
     this.sum += w;
+    this.area += w * speed;
     this.weighted += w * frame;
     return undefined;
   }
 
-  private begin(s: 'hole' | 'sticker'): void {
+  private begin(s: 'hole' | 'sticker', frame: number): void {
     this.state = s;
+    this.start = frame;
+    this.depth = 0;
+    this.area = 0;
     this.sum = 0;
     this.weighted = 0;
   }
