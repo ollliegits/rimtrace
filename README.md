@@ -100,7 +100,9 @@ Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet
 - **Bild drehen/spiegeln** in der Konfiguration (`rotate`, `mirror`), damit die Felge von oben ins Bild hängt; Messbereiche gelten im gedrehten Bild.
 - Gespeichert wird im `localStorage` der Steuerung: Konfiguration (`rimtrace.control.v1`), letztes Ergebnis (`rimtrace.result.v1`). Die Kamera sendet nach einer Neukopplung ihr letztes Ergebnis erneut.
 
-**HTTPS am iPhone:** `npm run dev:https`, am Notebook `https://<IP>:5173` (Adresse steht in der Konsole), am iPhone dieselbe Adresse. Das Zertifikat ist selbstsigniert: Safari warnt, „Details“ → „Diese Website besuchen“ bestätigen. Die Kamera-Freigabe verlangt HTTPS. Alternativ GitHub Pages: `.github/workflows/pages.yml` baut mit `BASE_PATH=/<Repository>/` und wird aktiv, sobald das Repository ein Remote hat und Pages auf „GitHub Actions“ steht.
+**HTTPS am iPhone:** `npm run dev:https`, am Notebook `https://<IP>:5173` (Adresse steht in der Konsole), am iPhone dieselbe Adresse. Das Zertifikat ist selbstsigniert: Safari warnt, „Details“ → „Diese Website besuchen“ bestätigen. Die Kamera-Freigabe verlangt HTTPS. Alternativ GitHub Pages (getestet): `.github/workflows/pages.yml` baut mit `BASE_PATH=/<Repository>/`, Pages-Source „GitHub Actions“; `https://<Nutzer>.github.io/<Repository>/control.html` am Notebook, `camera.html` am Handy.
+
+**Fehlersuche Kopplung:** Die Zeile „ICE“ in der Tabelle beider Seiten zeigt den Zustand und die Adressen beider Seiten. Bekannte Ursachen: Firewall am Notebook mit „Alle eingehenden Verbindungen blockieren“ (blockiert UDP vom Handy); iPhone-Hotspot als Netz ungeeignet (Safari bietet nur Mobilfunk-Adressen an, nicht `172.20.10.1`); WLAN mit Geräteisolation. Mit normalem WLAN und ohne diese Firewall-Einstellung verband es direkt.
 
 **Testcheckliste (iPhone ↔ Notebook):**
 
