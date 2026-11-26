@@ -140,7 +140,9 @@ function applyConfigSilently(): boolean {
 async function openWebcam(): Promise<void> {
   if (webcam?.active) return;
   try {
-    webcam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } });
+    const open = navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } });
+    // Bleibt die Freigabeabfrage unbeantwortet, nicht ewig warten: der Antwort-Code kann auch eingefügt werden.
+    webcam = await Promise.race([open, new Promise<never>((_, no) => setTimeout(() => no(new Error('keine Reaktion auf die Freigabeabfrage')), 10000))]);
     const v = $<HTMLVideoElement>('cam');
     v.srcObject = webcam;
     await v.play();
@@ -322,6 +324,7 @@ function renderLive(): void {
     row('Löcher', session ? `Nullpunkte ${session.markers} · netto ${session.holes} · ${dir}` : '–'),
     row('Warnungen', session?.warnings.length ? session.warnings.join(', ') : 'keine'),
     row('Verbindung', `${link?.state ?? 'nicht gekoppelt'}${pair ? ' · ' + pair : ''}`),
+    row('ICE', link?.diag() ?? '–'),
   ].join('');
 }
 

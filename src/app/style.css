@@ -86,3 +86,5 @@ textarea[rows='3'] { font-size: 11px; }
 .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #232c38; }
 .pill.ok { background: #1f5a3a; }
 .pill.bad { background: #6b2b1f; }
+
+[hidden] { display: none !important; }

@@ -208,6 +208,7 @@ function renderDiag(): void {
     row('Warnungen', t?.warnings.length ? t.warnings.join(', ') : 'keine'),
     row('Messung', running ? 'läuft' : 'gestoppt'),
     row('Verbindung', `${link?.state ?? 'nicht gekoppelt'}${pair ? ' · ' + pair : ''}`),
+    row('ICE', link?.diag() ?? '–'),
     row('QR', qrInfo || '–'),
     row('Display bleibt an', wakeState),
   ].join('');

@@ -111,6 +111,14 @@ export class Link {
     return 'unbekannt';
   }
 
+  /** Verbindungsdiagnose: ICE-Zustand und die Kandidaten beider Seiten (aus den SDPs). */
+  diag(): string {
+    const list = (sdp?: string) => (sdp ?? '').split(/\r?\n/).filter((l) => l.startsWith('a=candidate:')).map((l) => l.split(' ').slice(4, 6).join(':'));
+    const l = list(this.pc.localDescription?.sdp);
+    const r = list(this.pc.remoteDescription?.sdp);
+    return `ICE ${this.pc.iceConnectionState} · lokal ${l.join(', ') || 'keine'} · fern ${r.join(', ') || 'keine'}`;
+  }
+
   close(): void {
     this.channel?.close();
     this.pc.close();
