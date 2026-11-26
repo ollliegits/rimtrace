@@ -89,6 +89,7 @@ function onMessage(m: Message): void {
       break;
     case 'config':
       applyConfig(m.setup);
+      send({ t: 'config-ok' });
       break;
     case 'snapshot-request':
       void sendSnapshot(m.maxSize);
@@ -116,6 +117,7 @@ function onMessage(m: Message): void {
 }
 
 function setLinkState(state: LinkState, detail: string): void {
+  document.body.classList.toggle('linked', state === 'verbunden');
   $('link').textContent = state === 'getrennt' || state === 'fehler' ? `${state}${detail ? ' – ' + detail : ''}` : state;
   $('relink').hidden = !(state === 'getrennt' || state === 'fehler');
   if (state === 'getrennt' || state === 'fehler') warn(`Verbindung zur Steuerung ${state === 'fehler' ? 'fehlgeschlagen' : 'getrennt'}. ${running ? 'Die Messung läuft weiter; ' : ''}„Neu koppeln“ wählen.`);

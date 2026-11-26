@@ -18,6 +18,7 @@ export interface CameraStatus {
 export type Message =
   | { t: 'hello'; role: 'control' | 'camera' }
   | { t: 'config'; setup: RealSetup }
+  | { t: 'config-ok' }
   | { t: 'snapshot-request'; maxSize: number }
   | { t: 'snapshot'; id: number; index: number; count: number; data: string; width: number; height: number; fullWidth: number; fullHeight: number }
   | { t: 'start' }
@@ -49,6 +50,7 @@ export function decode(text: string): { message: Message } | { error: string } {
       return raw.role === 'control' || raw.role === 'camera' ? { message: { t: 'hello', role: raw.role } } : { error: 'hello: Rolle fehlt' };
     case 'start':
     case 'stop':
+    case 'config-ok':
       return { message: { t: raw.t } };
     case 'config': {
       if (!isObj(raw.setup)) return { error: 'config: setup fehlt' };

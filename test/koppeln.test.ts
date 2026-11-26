@@ -93,6 +93,7 @@ describe('Protokoll', () => {
     const msgs: Message[] = [
       { t: 'hello', role: 'camera' },
       { t: 'start' },
+      { t: 'config-ok' },
       { t: 'config', setup: { ...defaultRealSetup, rimWidthMm: 27.5 } },
       { t: 'snapshot-request', maxSize: 960 },
       { t: 'status', camera: { running: true, fps: 59.9, width: 1920, height: 1080, dropped: 2 } },

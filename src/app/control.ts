@@ -34,6 +34,7 @@ let setup: RealSetup | undefined;
 let camera: CameraStatus | undefined;
 let session: SessionStatus | undefined;
 let lastStatusAt = 0;
+let ackTimer: ReturnType<typeof setTimeout> | undefined;
 let stopScan: (() => void) | undefined;
 let webcam: MediaStream | undefined;
 let pair = '';
@@ -41,6 +42,7 @@ let chartKey = '';
 let charts: { lat: ReturnType<typeof createRunoutChart>; h: ReturnType<typeof createRunoutChart> } | undefined;
 let snapshotImage: HTMLImageElement | undefined;
 let snapshotScale = 1;
+let viewK = 1; // Videopixel → Canvaspixel
 let snapshotBlobUrl = '';
 const assembler = new SnapshotAssembler();
 
@@ -107,7 +109,14 @@ function applyConfig(): boolean {
   setup = s;
   localStorage.setItem(CONFIG_KEY, JSON.stringify(s));
   msg.className = 'muted';
-  msg.textContent = link?.state === 'verbunden' ? 'gesendet' : 'gespeichert (wird nach der Kopplung gesendet)';
+  clearTimeout(ackTimer);
+  if (link?.state === 'verbunden') {
+    msg.textContent = 'gesendet, warte auf Bestätigung des Handys …';
+    ackTimer = setTimeout(() => {
+      msg.className = 'error';
+      msg.textContent = 'keine Bestätigung vom Handy (Verbindung prüfen, Seite am Handy neu laden)';
+    }, 3000);
+  } else msg.textContent = 'gespeichert (wird nach der Kopplung gesendet)';
   link?.send({ t: 'config', setup: s });
   drawSnapshot();
   return true;
@@ -218,6 +227,11 @@ function onMessage(m: Message): void {
     case 'hello':
       if (setup) link?.send({ t: 'config', setup });
       break;
+    case 'config-ok':
+      clearTimeout(ackTimer);
+      $('cfgMsg').className = 'ok';
+      $('cfgMsg').textContent = `vom Handy bestätigt (${new Date().toLocaleTimeString()})`;
+      break;
     case 'status':
       camera = m.camera;
       session = m.session;
@@ -259,25 +273,40 @@ function shownSetup(): RealSetup | undefined {
   return typeof s === 'string' ? setup : s;
 }
 
+// Das Canvas wird in Anzeigeauflösung gezeichnet, damit Linien und Schrift scharf bleiben.
 function drawSnapshot(): void {
   if (!snapshotImage) return;
   const c = $<HTMLCanvasElement>('snapView');
-  c.width = snapshotImage.width;
-  c.height = snapshotImage.height;
+  c.width = Math.round((c.clientWidth || snapshotImage.width) * (window.devicePixelRatio || 1));
+  c.height = Math.round((c.width * snapshotImage.height) / snapshotImage.width);
+  viewK = c.width / (snapshotImage.width / snapshotScale);
   const ctx = c.getContext('2d')!;
-  ctx.drawImage(snapshotImage, 0, 0);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(snapshotImage, 0, 0, c.width, c.height);
   const s = shownSetup();
   if (!s) return;
-  const k = snapshotScale;
+  const k = viewK;
   const u = pxPerCss(c);
-  ctx.font = `${12 * u}px sans-serif`;
-  ctx.lineWidth = 2 * u;
+  ctx.font = `bold ${14 * u}px sans-serif`;
+  ctx.lineJoin = 'round';
   for (const def of boxDefs) {
     const b = def.get(s);
-    ctx.strokeStyle = ctx.fillStyle = def.color;
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = 2 * u;
     ctx.strokeRect(b.x0 * k, b.y0 * k, (b.x1 - b.x0) * k, (b.y1 - b.y0) * k);
-    ctx.fillText(def.label, b.x0 * k + 4 * u, b.y0 * k - 4 * u);
-    for (const [x, y] of corners(b)) ctx.fillRect(x * k - handleCss * u, y * k - handleCss * u, 2 * handleCss * u, 2 * handleCss * u);
+    const ty = b.y0 * k > 20 * u ? b.y0 * k - 8 * u : b.y0 * k + 18 * u;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3 * u;
+    ctx.strokeText(def.label, b.x0 * k + 4 * u, ty);
+    ctx.fillStyle = def.color;
+    ctx.fillText(def.label, b.x0 * k + 4 * u, ty);
+    for (const [x, y] of corners(b)) {
+      const h = handleCss * u;
+      ctx.lineWidth = u;
+      ctx.strokeStyle = '#000';
+      ctx.fillRect(x * k - h, y * k - h, 2 * h, 2 * h);
+      ctx.strokeRect(x * k - h, y * k - h, 2 * h, 2 * h);
+    }
   }
 }
 
@@ -318,14 +347,14 @@ const pxPerCss = (c: HTMLCanvasElement) => (c.clientWidth ? c.width / c.clientWi
 // Position in Videokoordinaten
 function pointerPos(e: PointerEvent): { x: number; y: number } {
   const r = view.getBoundingClientRect();
-  return { x: ((e.clientX - r.left) * pxPerCss(view)) / snapshotScale, y: ((e.clientY - r.top) * pxPerCss(view)) / snapshotScale };
+  return { x: ((e.clientX - r.left) * pxPerCss(view)) / viewK, y: ((e.clientY - r.top) * pxPerCss(view)) / viewK };
 }
 
 function hitBox(e: PointerEvent): Drag | undefined {
   const s = shownSetup();
   if (!s || !snapshotImage) return undefined;
   const p = pointerPos(e);
-  const reach = (handleCss * 1.5 * pxPerCss(view)) / snapshotScale;
+  const reach = (handleCss * 1.5 * pxPerCss(view)) / viewK;
   let move: Drag | undefined;
   let area = Infinity;
   let near: Drag | undefined;
@@ -460,6 +489,7 @@ setInterval(() => {
 $('pair').onclick = () => void startPairing();
 $('relink').onclick = () => void startPairing();
 $<HTMLTextAreaElement>('areas').oninput = drawSnapshot;
+window.onresize = drawSnapshot;
 $('answerApply').onclick = () => void applyAnswer($<HTMLTextAreaElement>('answerIn').value);
 $('apply').onclick = () => void applyConfig();
 $('defaults').onclick = () => writeForm({ ...defaultRealSetup, ...(readForm() as RealSetup) });

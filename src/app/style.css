@@ -73,10 +73,13 @@ textarea {
 }
 textarea[readonly] { opacity: 0.6; }
 .error { color: #ff8a80; }
+.ok { color: #6fe39a; }
 
 #diagRows td { padding: 2px 10px 2px 0; font-variant-numeric: tabular-nums; }
 #diagRows td:first-child { color: #9aa4b2; }
 #preview video { max-width: 100%; max-height: 40vh; border-radius: 6px; }
+.linked #preview video { width: 100%; max-height: 75vh; }
+.linked #pairing { display: none; }
 a { color: #4cc2ff; }
 textarea[rows='3'] { font-size: 11px; }
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
@@ -88,4 +91,4 @@ textarea[rows='3'] { font-size: 11px; }
 .pill.bad { background: #6b2b1f; }
 
 [hidden] { display: none !important; }
-#snapView { touch-action: none; }
+#snapView { touch-action: none; max-width: 720px; }
