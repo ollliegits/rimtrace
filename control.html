@@ -56,8 +56,8 @@
           <label>Toleranz Seite (mm) <input id="toleranceLateralMm" type="number" min="0" step="0.05" /></label>
           <label>Toleranz Höhe (mm) <input id="toleranceHeightMm" type="number" min="0" step="0.05" /></label>
         </div>
-        <details open>
-          <summary>Messbereiche (JSON, Pixel im gedrehten Bild)</summary>
+        <details>
+          <summary>Messbereiche als Zahlen (JSON, Pixel im gedrehten Bild) – Feineinstellung</summary>
           <textarea id="areas" rows="16" spellcheck="false"></textarea>
         </details>
         <p><button id="apply">Übernehmen und senden</button> <button id="defaults">Standardbereiche</button> <span id="cfgMsg"></span></p>
@@ -67,7 +67,7 @@
         <h2>3 · Standbild und Messbereiche</h2>
         <p><button id="snap">Standbild vom Handy holen</button> <span id="snapMsg" class="muted"></span></p>
         <canvas id="snapView"></canvas>
-        <p class="muted">Rot: Ausschnitt · Gelb: Felge · Grün: Referenz · Blau: Bettstreifen. Zahlen aus dem Bild ablesen und in die Bereiche eintragen.</p>
+        <p class="muted">Rot: Ausschnitt · Gelb: Felge · Grün: Referenz · Blau: Bettstreifen. Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn. Änderungen werden sofort übernommen und ans Handy gesendet.</p>
       </section>
 
       <section class="card">

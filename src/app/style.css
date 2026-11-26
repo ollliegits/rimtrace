@@ -88,3 +88,4 @@ textarea[rows='3'] { font-size: 11px; }
 .pill.bad { background: #6b2b1f; }
 
 [hidden] { display: none !important; }
+#snapView { touch-action: none; }

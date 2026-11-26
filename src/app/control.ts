@@ -119,6 +119,8 @@ function setLinkState(state: LinkState, detail: string): void {
   $('relink').hidden = !(state === 'getrennt' || state === 'fehler' || state === 'verbunden');
   if (state === 'verbunden') {
     stopScan?.();
+    stopWebcam();
+    $('pairBox').hidden = true;
     warn('');
     $('pairMsg').textContent = 'verbunden';
     lastStatusAt = Date.now();
@@ -149,6 +151,13 @@ async function openWebcam(): Promise<void> {
   } catch (e) {
     $('pairMsg').textContent = `Webcam nicht verfügbar (${(e as Error).message}); Antwort-Code bitte einfügen.`;
   }
+}
+
+// Die Webcam wird nur für den Antwort-QR gebraucht.
+function stopWebcam(): void {
+  webcam?.getTracks().forEach((t) => t.stop());
+  webcam = undefined;
+  $<HTMLVideoElement>('cam').srcObject = null;
 }
 
 function newLink(): Link {
@@ -244,6 +253,12 @@ function showSnapshot(bytes: Uint8Array, width: number, fullWidth: number): void
   img.src = snapshotBlobUrl;
 }
 
+// Die Rahmen folgen dem JSON; ist es gerade ungültig, gilt die zuletzt übernommene Konfiguration.
+function shownSetup(): RealSetup | undefined {
+  const s = currentSetup();
+  return typeof s === 'string' ? setup : s;
+}
+
 function drawSnapshot(): void {
   if (!snapshotImage) return;
   const c = $<HTMLCanvasElement>('snapView');
@@ -251,19 +266,127 @@ function drawSnapshot(): void {
   c.height = snapshotImage.height;
   const ctx = c.getContext('2d')!;
   ctx.drawImage(snapshotImage, 0, 0);
-  const s = typeof currentSetup() === 'string' ? setup : (currentSetup() as RealSetup);
+  const s = shownSetup();
   if (!s) return;
   const k = snapshotScale;
-  const box = (color: string, x: number, y: number, w: number, h: number) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x * k, y * k, w * k, h * k);
-  };
-  box('#ff4c4c', s.crop[0], s.crop[1], s.crop[2], s.crop[3]);
-  box('#ffe066', s.rimX[0], s.rimY[0], s.rimX[1] - s.rimX[0], s.rimY[1] - s.rimY[0]);
-  box('#6fe39a', s.refX[0], s.refY[0], s.refX[1] - s.refX[0], s.refY[1] - s.refY[0]);
-  box('#4cc2ff', s.bedX[0], s.bedY[0], s.bedX[1] - s.bedX[0], s.bedY[1] - s.bedY[0]);
+  const u = pxPerCss(c);
+  ctx.font = `${12 * u}px sans-serif`;
+  ctx.lineWidth = 2 * u;
+  for (const def of boxDefs) {
+    const b = def.get(s);
+    ctx.strokeStyle = ctx.fillStyle = def.color;
+    ctx.strokeRect(b.x0 * k, b.y0 * k, (b.x1 - b.x0) * k, (b.y1 - b.y0) * k);
+    ctx.fillText(def.label, b.x0 * k + 4 * u, b.y0 * k - 4 * u);
+    for (const [x, y] of corners(b)) ctx.fillRect(x * k - handleCss * u, y * k - handleCss * u, 2 * handleCss * u, 2 * handleCss * u);
+  }
 }
+
+// Messbereiche am Standbild mit der Maus: Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn.
+type Box = { x0: number; y0: number; x1: number; y1: number };
+type BoxDef = { color: string; label: string; get(s: RealSetup): Box; set(a: Record<string, number[]>, b: Box): void };
+
+const handleCss = 6;
+const xyBox = (color: string, label: string, kx: 'rimX' | 'refX' | 'bedX', ky: 'rimY' | 'refY' | 'bedY'): BoxDef => ({
+  color,
+  label,
+  get: (s) => ({ x0: s[kx][0], x1: s[kx][1], y0: s[ky][0], y1: s[ky][1] }),
+  set: (a, b) => {
+    a[kx] = [b.x0, b.x1];
+    a[ky] = [b.y0, b.y1];
+  },
+});
+const boxDefs: BoxDef[] = [
+  {
+    color: '#ff4c4c',
+    label: 'Ausschnitt',
+    get: (s) => ({ x0: s.crop[0], y0: s.crop[1], x1: s.crop[0] + s.crop[2], y1: s.crop[1] + s.crop[3] }),
+    set: (a, b) => {
+      a.crop = [b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0];
+    },
+  },
+  xyBox('#ffe066', 'Felge', 'rimX', 'rimY'),
+  xyBox('#6fe39a', 'Referenz', 'refX', 'refY'),
+  xyBox('#4cc2ff', 'Bettstreifen', 'bedX', 'bedY'),
+];
+
+type Drag = { def: BoxDef; start: Box; x: number; y: number; cx?: 0 | 1; cy?: 0 | 1 };
+let drag: Drag | undefined;
+
+const corners = (b: Box): [number, number][] => [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]];
+const pxPerCss = (c: HTMLCanvasElement) => (c.clientWidth ? c.width / c.clientWidth : 1);
+
+// Position in Videokoordinaten
+function pointerPos(e: PointerEvent): { x: number; y: number } {
+  const r = view.getBoundingClientRect();
+  return { x: ((e.clientX - r.left) * pxPerCss(view)) / snapshotScale, y: ((e.clientY - r.top) * pxPerCss(view)) / snapshotScale };
+}
+
+function hitBox(e: PointerEvent): Drag | undefined {
+  const s = shownSetup();
+  if (!s || !snapshotImage) return undefined;
+  const p = pointerPos(e);
+  const reach = (handleCss * 1.5 * pxPerCss(view)) / snapshotScale;
+  let move: Drag | undefined;
+  let area = Infinity;
+  let near: Drag | undefined;
+  let dist = reach;
+  for (const def of boxDefs) {
+    const b = def.get(s);
+    for (const [i, [x, y]] of corners(b).entries()) {
+      const d = Math.max(Math.abs(p.x - x), Math.abs(p.y - y));
+      if (d <= dist) {
+        dist = d;
+        near = { def, start: b, x: p.x, y: p.y, cx: (i % 2) as 0 | 1, cy: Math.floor(i / 2) as 0 | 1 };
+      }
+    }
+    const a = (b.x1 - b.x0) * (b.y1 - b.y0);
+    if (p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && a < area) {
+      area = a;
+      move = { def, start: b, x: p.x, y: p.y };
+    }
+  }
+  return near ?? move;
+}
+
+function dragTo(e: PointerEvent): void {
+  if (!drag) return;
+  const p = pointerPos(e);
+  const dx = p.x - drag.x;
+  const dy = p.y - drag.y;
+  const { start: b } = drag;
+  let n: Box;
+  if (drag.cx === undefined) n = { x0: b.x0 + dx, x1: b.x1 + dx, y0: b.y0 + dy, y1: b.y1 + dy };
+  else {
+    const x = (drag.cx ? b.x1 : b.x0) + dx;
+    const y = (drag.cy ? b.y1 : b.y0) + dy;
+    n = { x0: Math.min(x, drag.cx ? b.x0 : b.x1), x1: Math.max(x, drag.cx ? b.x0 : b.x1), y0: Math.min(y, drag.cy ? b.y0 : b.y1), y1: Math.max(y, drag.cy ? b.y0 : b.y1) };
+  }
+  const r = (v: number) => Math.max(0, Math.round(v));
+  try {
+    const a = JSON.parse($<HTMLTextAreaElement>('areas').value);
+    drag.def.set(a, { x0: r(n.x0), x1: r(n.x1), y0: r(n.y0), y1: r(n.y1) });
+    $<HTMLTextAreaElement>('areas').value = JSON.stringify(a, null, 1);
+    drawSnapshot();
+  } catch {
+    // JSON ungültig: erst dort korrigieren
+  }
+}
+
+const view = $<HTMLCanvasElement>('snapView');
+view.onpointerdown = (e) => {
+  drag = hitBox(e);
+  if (drag) view.setPointerCapture(e.pointerId);
+};
+view.onpointermove = (e) => {
+  if (drag) return dragTo(e);
+  const h = hitBox(e);
+  view.style.cursor = !h ? '' : h.cx === undefined ? 'move' : 'crosshair';
+};
+view.onpointerup = () => {
+  if (!drag) return;
+  drag = undefined;
+  applyConfig();
+};
 
 // Ergebnis
 function buildCharts(spokes: number, revs: number): void {
@@ -336,6 +459,7 @@ setInterval(() => {
 
 $('pair').onclick = () => void startPairing();
 $('relink').onclick = () => void startPairing();
+$<HTMLTextAreaElement>('areas').oninput = drawSnapshot;
 $('answerApply').onclick = () => void applyAnswer($<HTMLTextAreaElement>('answerIn').value);
 $('apply').onclick = () => void applyConfig();
 $('defaults').onclick = () => writeForm({ ...defaultRealSetup, ...(readForm() as RealSetup) });
