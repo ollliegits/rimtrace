@@ -7,13 +7,13 @@ Webapp-PoC (iPhone/Safari) für die **kontinuierliche Messung von Seiten- und H�
 - Drehwinkel aus der Markerspur: eine Marke pro Speiche, Doppelmarke am Ventil als Nullpunkt, linear interpoliert
 - Ergebnis: Profil je Speiche (Median über mehrere Umdrehungen) und Top-3-Maßnahmen
 
-**Stand: Stufe 2.** Es gibt noch kein echtes Rad und keine Kamera; alles läuft gegen einen deterministischen synthetischen Feed mit bekannter Ground Truth oder gegen eine Videodatei (z. B. das in der Oberfläche aufgenommene Testvideo).
+**Stand: Stufe 3.** Zwei Analysepfade: der synthetische (Generator mit Ground Truth, Markerspur) und ein zweiter für **echte Aufnahmen** (Felge von oben im Bild, Löcher als Speichentakt, Aufkleber als Nullpunkt). Eine Kamera ist noch nicht angebunden.
 
 ## Befehle
 
 ```sh
 npm install
-npm test          # je Testfall (ideal, kamera, handdrehung, zu-schnell): Generator → Auswertung → Ground Truth (Fehlertabelle + Abnahme)
+npm test          # synthetisch (ideal, kamera, handdrehung, zu-schnell) und echte Videos (real-0977, real-0975, nur wenn videos/IMG_*.MOV vorhanden)
 npm run dev       # Web-Oberfläche auf http://localhost:5173
 npm run build     # Typprüfung + Produktions-Build
 ```
@@ -29,12 +29,16 @@ src/core/       reine Funktionen auf Graustufenbildern (Uint8Array + Breite/Höh
   recommend.ts    Faustregel-Empfehlung, Top-3
   analyzer.ts     verbindet alles, Bild für Bild
   setup.ts        Felgen-/Bildgeometrie, parseSetup (JSON)
+  silhouette.ts   Flanken, Hornspitzen, Oberkanten mit Subpixel-Genauigkeit (echte Aufnahmen)
+  holes.ts        Loch- und Aufkleber-Erkennung aus der Helligkeit eines Fensters
+  realSetup.ts    Setup für echte Aufnahmen (Pixel im Videobild)
+  realAnalyzer.ts Auswertung echter Aufnahmen: Bild für Bild, danach Profil je Umdrehung
 src/generator/  deterministischer Testvideo-Generator (Seed) mit Ground Truth je Bild
   render.ts       Szene mit wahrem Maßstab, analytische Gauß-Unschärfe
   noise.ts        normalverteiltes Bildrauschen (Seed)
   rotation.ts     Handdrehung: schwankende Geschwindigkeit, Stopps, Zurückdrehen (Seed)
 src/app/        Web-Oberfläche (Canvas, Live-Werte, uPlot-Diagramme, Setup-Editor); FrameSource als Schnittstelle
-test/           Vitest
+test/           Vitest; support/videoReader.ts liest Videos in Node über ffmpeg-static, real/*.json ist das Setup je Video
 ```
 
 `FrameSource` (`src/app/frameSource.ts`) ist die austauschbare Bildquelle. Implementiert: `GeneratorSource` und `VideoFileSource` (`<video>` → Canvas → Graustufen, jedes dargestellte Bild einmal, Pause/Neustart). Die Kamera (`getUserMedia`) implementiert später dieselbe Schnittstelle.
@@ -60,6 +64,18 @@ Grenze: Schritte über ½ Speiche/Bild sind von einem kleinen Rückwärtsschritt
 
 In der Oberfläche eine Videodatei wählen oder mit „Testvideo aufnehmen“ den gewählten Testfall 15 s in Echtzeit per `MediaRecorder` aufnehmen (wird danach automatisch geladen, „Video speichern“ legt eine Datei ab; nicht eingecheckt). Die Pixelbereiche (`Setup`: Flankenzeilen, Referenzkante, Hornspalten, Markerspur, Lesestelle) lassen sich bei Videoquellen als JSON editieren, das Overlay folgt live, gespeichert wird im `localStorage` (`rimtrace.setup.v1`). Teil-JSON ergänzt die Standardwerte. Ground Truth ist bei Videodateien optional; ohne sie zeigen die Diagramme nur den Messwert.
 
+### Echte Aufnahmen (Stufe 3)
+
+Aufbau der Aufnahme: Hochformat, Felge hängt von oben ins Bild, helle Fläche dahinter, rechts daneben eine Referenzspeiche (Nippelkopf) oder ein Referenzblock. Ausgewertet wird nur der Bildausschnitt `crop`.
+
+- Seitenschlag = Felgenmitte (aus den Flanken) minus Referenz, Höhenschlag = mittlere Hornspitze minus Oberkante der Referenz; Maßstab = bekannte Felgenbreite / gemessene Breite (Median über das ganze Video).
+- Drehposition: Das Fenster `holeWindow` oberhalb der Hornspitzen liegt in der Felgenmitte; jedes Speichenloch (Helligkeitseinbruch) ist ein Takt, der helle Aufkleber der Nullpunkt (Loch 0 = erstes Loch danach). Löcher vor dem ersten Aufkleber werden rückwärts nummeriert (Umdrehung 0, nur Teil).
+- Pro Speiche und Umdrehung der Median der Bilder um das Loch (± `binHalfWidth` Lochabstand), zentriert; „Median alle“ über alle Umdrehungen. Die Top-3-Maßnahmen (Faustregel aus Stufe 1) beruhen auf „alle“.
+
+**Bedienung:** `npm run dev`, „Auswertung: echte Aufnahme“ wählen, Videodatei laden (die Standardwerte passen zu `IMG_0977`). Das Setup-JSON darunter enthält alle Messbereiche in Videopixeln; das Overlay (Flankenzeilen, Hornspitzen, Referenz, Lochfenster) folgt der Eingabe live, gespeichert wird im `localStorage` (`rimtrace.realsetup.v1`). Teil-JSON ergänzt die Standardwerte, `spokes` (Standard 28) stellt die Speichenzahl ein. Eine Änderung von `crop` startet das Video neu, andere Änderungen werten ab dem nächsten Bild neu aus („Zurücksetzen“ startet von vorn). Für jedes Video braucht es eigene Messbereiche; Beispiele in `test/real/*.json`. Videos liegen in `videos/` (nicht eingecheckt); die `real-*`-Tests überspringen sich ohne Datei.
+
+Grenzen: Messbereiche manuell; Rückwärtsdrehen wird nicht erkannt; die Felgenbreite von 27 mm ist noch nicht nachgemessen.
+
 ### Annahmen des Generators
 
 - Wahrer Maßstab 0,0937 mm/px (einstellbar), Bild 1920×480 (Ausschnitt aus 1920×1080), Felge 27 mm breit, Hörner 5 mm hoch und 3 mm breit, Umfang 1750 mm, 32 Speichen (gerade = links). Die Pixelbereiche in `Setup` sind unabhängig vom Maßstab.
@@ -69,8 +85,8 @@ In der Oberfläche eine Videodatei wählen oder mit „Testvideo aufnehmen“ de
 ## Stufenplan
 
 1. ✅ Generator plus Auswertung `ideal`
-2. Maßstab, Rauschen/Unschärfe, Handdrehung, Videodatei-Quelle ← **aktuell**
-3. Machbarkeitstest mit echten Aufnahmen: Kantenmessung mit Fühlerlehre, Drehwinkel-Erkennung am echten Rad
+2. ✅ Maßstab, Rauschen/Unschärfe, Handdrehung, Videodatei-Quelle
+3. Machbarkeitstest mit echten Aufnahmen: Auswertung echter Videos in Kern und App ✅; offen: Kantenmessung mit Fühlerlehre, Abgleich der Absolutwerte ← **aktuell**
 4. Optimierung anhand der echten Aufnahmen (Kantenerkennung, Störungen im Generator realistisch einstellen)
 5. Zentrieren am echten Rad mit Halterung, Rechenmodell, Abgleich mit Messuhren
 

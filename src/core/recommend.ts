@@ -27,7 +27,7 @@ const defaultTurnsPerMm = { lateral: 0.5, height: 0.5 };
  * - Felge an der Speiche zu weit links → rechte Speiche anziehen bzw. linke lösen (rechts analog).
  * - Felge zu hoch → Speiche anziehen, zu tief → lösen (beide Seiten gleich).
  */
-export function recommend(p: SpokeProfile, s: Setup, opts: RecommendOptions = {}): Action[] {
+export function recommend(p: SpokeProfile, s: Pick<Setup, 'evenSpokeSide'>, opts: RecommendOptions = {}): Action[] {
   const { toleranceMm = 0.2, count = 3, turnsPerMm = defaultTurnsPerMm } = opts;
   const actions: Action[] = [];
 

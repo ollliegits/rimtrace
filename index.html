@@ -3,13 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RimTrace – PoC Stufe 2</title>
+    <title>RimTrace – PoC Stufe 3</title>
   </head>
   <body>
     <header>
-      <h1>RimTrace <small>PoC Stufe 2 · <span id="status"></span></small></h1>
+      <h1>RimTrace <small>PoC Stufe 3 · <span id="status"></span></small></h1>
       <div class="controls">
         <label>Testfall <select id="scenario"></select></label>
+        <label>Auswertung
+          <select id="path">
+            <option value="real" selected>echte Aufnahme</option>
+            <option value="synthetic">synthetisch</option>
+          </select>
+        </label>
         <label class="file">Videodatei <input id="file" type="file" accept="video/*" /></label>
         <button id="record" title="Nimmt den gewählten Testfall 15 s in Echtzeit als Video auf und lädt es als Videoquelle">Testvideo aufnehmen</button>
         <a id="download" hidden>Video speichern</a>

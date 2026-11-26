@@ -71,17 +71,17 @@ export const defaultSetup: Setup = {
   markMargin: 130,
 };
 
-export function spokeSide(s: Setup, spoke: number): 'left' | 'right' {
+export function spokeSide(s: Pick<Setup, 'evenSpokeSide'>, spoke: number): 'left' | 'right' {
   const even = spoke % 2 === 0;
   const evenLeft = s.evenSpokeSide === 'left';
   return even === evenLeft ? 'left' : 'right';
 }
 
 /** Liest ein (teilweises) Setup aus JSON; unbekannte Felder oder falsche Typen sind Fehler. */
-export function parseSetup(text: string, base: Setup = defaultSetup): Setup {
+export function parseSetup<T extends object = Setup>(text: string, base: T = defaultSetup as unknown as T): T {
   const raw: unknown = JSON.parse(text);
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('Setup muss ein JSON-Objekt sein');
-  const out: Record<string, unknown> = { ...base };
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
   for (const [key, value] of Object.entries(raw)) {
     const ref = (base as unknown as Record<string, unknown>)[key];
     if (ref === undefined) throw new Error(`Unbekanntes Feld: ${key}`);
@@ -91,5 +91,5 @@ export function parseSetup(text: string, base: Setup = defaultSetup): Setup {
     if (!ok) throw new Error(`Falscher Typ bei ${key}`);
     out[key] = value;
   }
-  return out as unknown as Setup;
+  return out as T;
 }
