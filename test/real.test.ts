@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { defaultRealSetup, parseSetup, RealAnalyzer, recommend, describe as describeAction, type RealProfile } from '../src/core';
+import { defaultRealSetup, parseSetup, RealAnalyzer, realSetupError, recommend, describe as describeAction, type RealProfile } from '../src/core';
 import { readVideoGray } from './support/videoReader';
 
 const finite = (a: number[]) => a.filter(Number.isFinite);
@@ -11,6 +11,8 @@ const fmt = (v: number, w = 7) => (Number.isFinite(v) ? v.toFixed(2) : 'n/a').pa
 
 async function analyze(name: string) {
   const setup = parseSetup(readFileSync(`test/real/${name}.json`, 'utf8'), defaultRealSetup);
+  const error = realSetupError(setup);
+  if (error) throw new Error(`${name}.json: ${error}`);
   const an = new RealAnalyzer(setup);
   for await (const img of readVideoGray(`videos/${name}.MOV`, setup.crop as [number, number, number, number])) an.push(img);
   return { an, setup, profile: an.profile() };

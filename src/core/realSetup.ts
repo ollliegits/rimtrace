@@ -6,7 +6,7 @@
 export interface RealSetup {
   spokes: number;
   evenSpokeSide: 'left' | 'right';
-  /** Bekannte Außenbreite der Felge in mm; der Maßstab folgt aus der gemessenen Breite in px. */
+  /** Außenbreite der Felge in mm (Pflichtfeld, je Felge); der Maßstab folgt aus der gemessenen Breite in px. */
   rimWidthMm: number;
   /** Ausgewerteter Bildausschnitt [x, y, Breite, Höhe]. */
   crop: number[];
@@ -37,10 +37,15 @@ export interface RealSetup {
   binHalfWidth: number;
 }
 
+/** Fehlermeldung, wenn Pflichtangaben fehlen; sonst undefined. */
+export function realSetupError(s: RealSetup): string | undefined {
+  return s.rimWidthMm > 0 ? undefined : 'rimWidthMm ist ein Pflichtfeld: Außenbreite der Felge in mm (mit Messschieber messen) eintragen';
+}
+
 export const defaultRealSetup: RealSetup = {
   spokes: 28,
   evenSpokeSide: 'left',
-  rimWidthMm: 27.5,
+  rimWidthMm: 0,
   crop: [380, 560, 300, 450],
   rimX: [400, 575],
   rimY: [600, 1000],

@@ -3,6 +3,7 @@ import {
   Analyzer,
   RealAnalyzer,
   defaultRealSetup,
+  realSetupError,
   defaultSetup,
   describe,
   parseSetup,
@@ -35,6 +36,8 @@ let analyzer: Analyzer;
 // Echte Aufnahmen: eigener Analysepfad (Pfad „real“); sonst der synthetische aus Stufe 1/2
 let real = false;
 let realSetup: RealSetup = defaultRealSetup;
+// Pflichtangaben fehlen: es wird nicht ausgewertet
+let realError: string | undefined;
 let realAnalyzer = new RealAnalyzer(defaultRealSetup);
 let lastReal: { frame: Frame; geometry?: RealGeometry } | null = null;
 let realInfo: { holesPerRev: number[]; stickers: number[] } = { holesPerRev: [], stickers: [] };
@@ -117,6 +120,11 @@ function resetMeasurement(): void {
   truthMean = gt ? { lateral: m(gt.lateral), height: m(gt.height) } : { lateral: 0, height: 0 };
 }
 
+function showSetupMsg(text: string, error: boolean): void {
+  $('setupMsg').textContent = text;
+  $('setupMsg').className = error ? 'error' : 'muted';
+}
+
 function sizeCanvas(): void {
   canvas.width = source.width;
   canvas.height = source.height;
@@ -133,7 +141,8 @@ function useSource(next: FrameSource, label: string, realPath = false): void {
   if (real) {
     realSetup = storedRealSetup();
     (next as VideoFileSource).setCrop(realSetup.crop);
-  }
+    realError = realSetupError(realSetup);
+  } else realError = undefined;
   sizeCanvas();
   setupText.value = JSON.stringify(real ? realSetup : setup, null, 2);
   setupText.readOnly = !isVideo();
@@ -142,7 +151,7 @@ function useSource(next: FrameSource, label: string, realPath = false): void {
     : isVideo()
       ? 'Pixelbereiche der Videoaufnahme; Änderungen wirken sofort und werden im Browser gespeichert.'
       : 'Setup der synthetischen Quelle (nur lesbar). Für Videodateien ist es einstellbar.';
-  $('setupMsg').textContent = '';
+  showSetupMsg(realError ? realError : '', !!realError);
   $<HTMLSelectElement>('speed').disabled = isVideo();
   $('status').textContent = label;
   buildCharts(real ? realSetup.spokes : setup.spokes, real ? revSeries(0) : synSeries);
@@ -336,7 +345,7 @@ function loop(now: number): void {
   const dt = Math.min(now - lastT, 100);
   lastT = now;
   $('warn').hidden = now > tooFastUntil;
-  if (!running || busy) return;
+  if (!running || busy || (real && realError)) return;
 
   let steps = 16;
   if (!source.live) {
@@ -384,13 +393,12 @@ function applyRealSetupText(): void {
       throw new Error(`crop liegt nicht im Videobild (${video.videoWidth}×${video.videoHeight})`);
     }
     localStorage.setItem(REAL_STORAGE_KEY, JSON.stringify(next));
-    $('setupMsg').textContent = 'übernommen';
-    $('setupMsg').className = 'muted';
   } catch (e) {
-    $('setupMsg').textContent = (e as Error).message;
-    $('setupMsg').className = 'error';
+    showSetupMsg((e as Error).message, true);
     return;
   }
+  realError = realSetupError(next);
+  showSetupMsg(realError ?? 'übernommen', !!realError);
   const cropChanged = next.crop.join() !== realSetup.crop.join();
   const frame = lastReal?.frame;
   realSetup = next;
@@ -401,7 +409,7 @@ function applyRealSetupText(): void {
     video.setCrop(realSetup.crop);
     sizeCanvas();
     video.restart();
-  } else if (frame) {
+  } else if (frame && !realError) {
     frames = 1;
     pushReal(frame);
     renderReal();
@@ -437,7 +445,7 @@ function applySetupText(): void {
 setupText.addEventListener('input', applySetupText);
 $('setupDefault').addEventListener('click', () => {
   if (!isVideo()) return;
-  setupText.value = JSON.stringify(real ? defaultRealSetup : defaultSetup, null, 2);
+  setupText.value = JSON.stringify(real ? { ...defaultRealSetup, rimWidthMm: realSetup.rimWidthMm } : defaultSetup, null, 2);
   applySetupText();
 });
 
