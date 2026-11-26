@@ -40,7 +40,7 @@ export interface RealSetup {
 export const defaultRealSetup: RealSetup = {
   spokes: 28,
   evenSpokeSide: 'left',
-  rimWidthMm: 27,
+  rimWidthMm: 27.5,
   crop: [380, 560, 300, 450],
   rimX: [400, 575],
   rimY: [600, 1000],

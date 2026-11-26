@@ -74,7 +74,7 @@ Aufbau der Aufnahme: Hochformat, Felge hängt von oben ins Bild, helle Fläche d
 
 **Bedienung:** `npm run dev`, „Auswertung: echte Aufnahme“ wählen, Videodatei laden (die Standardwerte passen zu `IMG_0977`). Das Setup-JSON darunter enthält alle Messbereiche in Videopixeln; das Overlay (Flankenzeilen, Hornspitzen, Referenz, Lochfenster) folgt der Eingabe live, gespeichert wird im `localStorage` (`rimtrace.realsetup.v1`). Teil-JSON ergänzt die Standardwerte, `spokes` (Standard 28) stellt die Speichenzahl ein. Eine Änderung von `crop` startet das Video neu, andere Änderungen werten ab dem nächsten Bild neu aus („Zurücksetzen“ startet von vorn). Für jedes Video braucht es eigene Messbereiche; Beispiele in `test/real/*.json`. Videos liegen in `videos/` (nicht eingecheckt); die `real-*`-Tests überspringen sich ohne Datei.
 
-Grenzen: Messbereiche manuell; Rückwärtsdrehen wird nicht erkannt; die Felgenbreite von 27 mm ist noch nicht nachgemessen.
+Grenzen: Messbereiche manuell; Rückwärtsdrehen wird nicht erkannt; die Felgenbreite (Standard 27,5 mm, mit dem Messschieber gemessen) bestimmt den Maßstab und damit alle mm-Werte.
 
 ### Annahmen des Generators
 

@@ -58,14 +58,14 @@ describe.runIf(existsSync('videos/IMG_0977.MOV'))('real-0977: Umdrehung 1 gegen 
     expect(r.profile.holesPerRev.slice(1, 3)).toEqual([28, 28]);
   });
 
-  it('Maßstab liegt bei ca. 0,28 mm/px', () => {
-    expect(r.profile.scale).toBeGreaterThan(0.27);
-    expect(r.profile.scale).toBeLessThan(0.29);
+  it('Maßstab liegt bei ca. 0,287 mm/px', () => {
+    expect(r.profile.scale).toBeGreaterThan(0.275);
+    expect(r.profile.scale).toBeLessThan(0.295);
   });
 
   it('Seitenschlag: Umdrehungen stimmen überein', () => {
     expect(avg(diffLat)).toBeLessThan(0.35);
-    // Abnahme wäre 1,0 mm; erreicht 1,06 mm (Speichen 7/10, steile Rampe). Schwelle bewusst darüber, Abweichung siehe Bericht.
+    // Abnahme wäre 1,0 mm; erreicht 1,08 mm (Speichen 7/10, steile Rampe). Schwelle bewusst darüber, Abweichung siehe Bericht.
     expect(max(diffLat)).toBeLessThan(1.1);
   });
 
