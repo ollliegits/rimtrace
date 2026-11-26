@@ -32,8 +32,8 @@ jobs:
         env:
           # Repository-Unterpfad der Pages-Seite, z. B. /rimtrace/
           BASE_PATH: /${{ github.event.repository.name }}/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
