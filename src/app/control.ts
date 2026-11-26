@@ -174,7 +174,7 @@ async function startPairing(): Promise<void> {
     const q = drawQr($<HTMLCanvasElement>('offerQr'), code);
     $('offerInfo').textContent = `Offer-QR: Version ${q.version}, ${q.bytes} Zeichen`;
     $<HTMLTextAreaElement>('offerOut').value = code;
-    $('pairMsg').textContent = 'wartet auf Antwort des Handys';
+    $('pairMsg').textContent = 'wartet auf Antwort des Handys – Antwort-QR vor die Webcam halten (wird automatisch erkannt)';
     stopScan?.();
     if (webcam?.active) {
       stopScan = scanQr($<HTMLVideoElement>('cam'), (text) => {
@@ -190,7 +190,7 @@ async function startPairing(): Promise<void> {
 async function applyAnswer(code: string): Promise<void> {
   try {
     await link?.acceptAnswer(code.trim());
-    $('pairMsg').textContent = 'verbindet …';
+    $('pairMsg').textContent = 'Antwort erkannt, verbindet …';
   } catch (e) {
     $('pairMsg').textContent = `Antwort-Code ungültig: ${(e as Error).message}`;
     if (webcam?.active && link) {
