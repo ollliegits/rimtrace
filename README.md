@@ -104,6 +104,10 @@ Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet
 
 **Fehlersuche Kopplung:** Die Zeile „ICE“ in der Tabelle beider Seiten zeigt den Zustand und die Adressen beider Seiten. Bekannte Ursachen: Firewall am Notebook mit „Alle eingehenden Verbindungen blockieren“ (blockiert UDP vom Handy); iPhone-Hotspot als Netz ungeeignet (Safari bietet nur Mobilfunk-Adressen an, nicht `172.20.10.1`); WLAN mit Geräteisolation. Mit normalem WLAN und ohne diese Firewall-Einstellung verband es direkt.
 
+**Auswertung:** Nur volle Umdrehungen (alle Löcher gezählt) fließen ein; der Anlauf vor dem Nullpunkt und die angefangene letzte Umdrehung werden ignoriert.
+
+**Stromversorgung:** Das Handy muss während der Messung am Ladegerät hängen. Kamera und Auswertung verbrauchen viel Strom, und der Bildschirm kann sich abschalten, wenn der Akku spart.
+
 **Testcheckliste (iPhone ↔ Notebook):**
 
 1. `npm run dev:https` am Notebook, `control.html` öffnen, Webcam freigeben, „Kopplung starten“.

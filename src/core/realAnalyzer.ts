@@ -266,6 +266,12 @@ export class RealAnalyzer {
       hei[h.rev][h.k].push(m.heightPx * scale);
     }
 
+    const holesPerRev = Array.from({ length: revs }, (_, r) => new Set(holes.filter((h) => h.rev === r).map((h) => h.ord)).size);
+    // Unvollständige Umdrehungen (Anlauf vor dem Nullpunkt, angefangene letzte) werden nicht ausgewertet.
+    holesPerRev.forEach((n, r) => {
+      if (n !== spokes) for (let k = 0; k < spokes; k++) lat[r][k] = hei[r][k] = [];
+    });
+
     const toProfile = (l: number[][], h: number[][]): SpokeProfile => ({
       lateral: centered(l.map((b) => (b.length ? median(b) : NaN))),
       height: centered(h.map((b) => (b.length ? median(b) : NaN))),
@@ -276,7 +282,7 @@ export class RealAnalyzer {
       scale,
       revolutions: lat.map((l, r) => toProfile(l, hei[r])),
       all: toProfile(merge(lat), merge(hei)),
-      holesPerRev: Array.from({ length: revs }, (_, r) => new Set(holes.filter((h) => h.rev === r).map((h) => h.ord)).size),
+      holesPerRev,
       markers,
     };
   }

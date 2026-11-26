@@ -120,9 +120,9 @@ describe.runIf(existsSync('videos/IMG_0975.MOV'))('real-0975: graue Referenz', (
     expect(r.an.measures.filter((m) => !m.ok)).toHaveLength(0);
   });
 
-  it('liefert ein plausibles Seitenschlag-Profil (ca. 10 mm)', () => {
-    expect(span(r.profile.all.lateral)).toBeGreaterThan(6);
-    expect(span(r.profile.all.lateral)).toBeLessThan(14);
+  it('ignoriert die unvollständigen Umdrehungen (keine volle Umdrehung im Video)', () => {
+    expect(r.profile.holesPerRev.some((n) => n === r.setup.spokes)).toBe(false);
+    expect(r.profile.all.count.every((n) => n === 0)).toBe(true);
   });
 });
 
