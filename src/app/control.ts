@@ -434,7 +434,10 @@ function buildCharts(spokes: number, revs: number): void {
   };
 }
 
+let shownResult: { result: RealResult; setup?: RealSetup } | undefined;
+
 function showResult(r: RealResult, s: RealSetup | undefined, at: number): void {
+  shownResult = { result: r, setup: s };
   const p = r.profile;
   buildCharts(p.all.lateral.length, p.revolutions.length);
   charts!.lat.update([...p.revolutions.map((v) => v.lateral), p.all.lateral]);
@@ -443,7 +446,7 @@ function showResult(r: RealResult, s: RealSetup | undefined, at: number): void {
   const c = r.check;
   $('check').innerHTML =
     `<p><span class="pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? 'Messung plausibel' : 'Messung unsicher'}</span> ` +
-    `<span class="muted">volle Umdrehungen ${c.fullRevolutions} · Übereinstimmung Ø ${c.agreeMeanMm.toFixed(2)} / max ${c.agreeMaxMm.toFixed(2)} mm</span></p>` +
+    `<span class="muted">volle Umdrehungen ${c.fullRevolutions} · Übereinstimmung Ø ${c.agreeMeanMm.toFixed(2)} / max ${c.agreeMaxMm.toFixed(2)} mm · Löcher je Umdrehung ${p.holesPerRev.join(', ') || '–'} · Nullpunkte ${p.markers.length}</span></p>` +
     (c.messages.length ? `<ul>${c.messages.map((m) => `<li class="error">${m}</li>`).join('')}</ul>` : '');
   if (s) {
     const lat = centered(p.all.lateral);
@@ -501,6 +504,15 @@ $('snap').onclick = () => {
 $('start').onclick = () => {
   if (!applyConfig()) return;
   link?.send({ t: 'start' });
+};
+$('copyResult').onclick = async () => {
+  const text = JSON.stringify({ ...shownResult, camera, session }, (_k, v) => (typeof v === 'number' && !Number.isFinite(v) ? null : v), 1);
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copyMsg').textContent = 'kopiert';
+  } catch {
+    $('copyMsg').textContent = 'Kopieren nicht möglich';
+  }
 };
 $('stop').onclick = () => link?.send({ t: 'stop' });
 
