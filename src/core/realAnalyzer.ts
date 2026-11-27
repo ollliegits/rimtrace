@@ -80,6 +80,8 @@ export class RealAnalyzer {
   readonly numEvents: NumEvent[] = [];
   /** Bettverschiebung je Bild in Fahrtrichtung (px), NaN wenn nicht bestimmbar. */
   readonly shifts: number[] = [];
+  /** Zurückgelegter Bettweg (Summe der Beträge) bis einschließlich Bild i. */
+  private travel: number[] = [];
   private bed: Float32Array | undefined;
   private lastDir = 1;
   private lastSpeed = 1;
@@ -104,6 +106,7 @@ export class RealAnalyzer {
     this.events.length = 0;
     this.numEvents.length = 0;
     this.shifts.length = 0;
+    this.travel.length = 0;
     this.bed = undefined;
     this.lastDir = 1;
     this.frame = 0;
@@ -179,6 +182,7 @@ export class RealAnalyzer {
     const d = this.bed ? bedShift(this.bed, cur, s.bedMaxShift) : NaN;
     this.bed = cur;
     this.shifts.push(s.travel === 'down' ? d : -d);
+    this.travel.push((this.travel[this.travel.length - 1] ?? 0) + (Number.isFinite(d) ? Math.abs(d) : 0));
   }
 
   /** Bettweg des Bildes in px; bei unbestimmbarer Verschiebung der letzte bekannte Wert. */
@@ -203,7 +207,9 @@ export class RealAnalyzer {
     // Kehrt das Bett im Fenster um, ist der Nettoweg klein gegen den zurückgelegten Weg: kein Durchgang.
     const dir = path === 0 ? this.lastDir : Math.abs(net) < 0.5 * path ? 0 : Math.sign(net);
     if (dir !== 0) this.lastDir = dir;
-    this.numEvents.push({ kind: e.kind, frame: e.frame, dir, size: e.area });
+    const i = Math.min(Math.floor(e.frame), this.travel.length - 1);
+    const pos = i >= 0 ? this.travel[i] + (this.travel[i + 1] === undefined ? 0 : (this.travel[i + 1] - this.travel[i]) * (e.frame - i)) : undefined;
+    this.numEvents.push({ kind: e.kind, frame: e.frame, dir, size: e.area, pos });
   }
 
   private store<T extends { measure: RealMeasure }>(r: T): T {
@@ -242,8 +248,8 @@ export class RealAnalyzer {
   }
 
   numbering(): Numbering {
-    const { marker, spokes, valveRatio } = this.setup;
-    return numberHoles(this.numEvents, { marker, spokes, valveRatio });
+    const { marker, spokes, valveRatio, holeMinGap } = this.setup;
+    return numberHoles(this.numEvents, { marker, spokes, valveRatio, holeMinGap });
   }
 
   profile(numbering = this.numbering()): RealProfile {

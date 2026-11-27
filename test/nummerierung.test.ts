@@ -21,10 +21,11 @@ function walk(path: number[], marker: 'ventil' | 'aufkleber' = 'ventil') {
   const truth = new Map<number, number>();
   let x = path[0];
   let t = 0;
+  let dist = 0;
   const cross = (a: number, b: number, at: number, kind: 'hole' | 'sticker', size: number, j?: number) => {
     if ((a < at) === (b < at)) return;
     const dir = b > a ? 1 : -1;
-    events.push({ kind, frame: t, dir, size });
+    events.push({ kind, frame: t, dir, size, pos: dist });
     if (j !== undefined) truth.set(t, j);
     t += 3;
   };
@@ -40,6 +41,7 @@ function walk(path: number[], marker: 'ventil' | 'aufkleber' = 'ventil') {
         }
       }
       x = nx;
+      dist += 0.05;
     }
   }
   return { events, truth };
@@ -69,6 +71,16 @@ describe('Nummerierung mit Drehrichtung', () => {
     const n = expectTrueNumbers([-0.1, 3.2, 2.4, 3.1, 8.3, 5.2, 7.4, 2.5 * N + 1]);
     expect(n.markers).toHaveLength(2);
     expect(new Set(n.holes.map((h) => h.ord)).size).toBe(n.holes.length - n.holes.filter((h, i, all) => all.findIndex((o) => o.ord === h.ord) !== i).length);
+  });
+
+  it('Störereignis zwischen zwei Löchern (kurzer Bettweg) verschiebt die Nummern nicht', () => {
+    const { events } = walk([-0.1, 2.5 * N]);
+    const at = events.findIndex((e) => e.kind === 'hole' && e.size === 1 && (e.pos as number) > 8);
+    const spurious = { ...events[at], frame: events[at].frame + 1, pos: (events[at].pos as number) + 0.2 };
+    const noisy = [...events.slice(0, at + 1), spurious, ...events.slice(at + 1)];
+    const key = (n: ReturnType<typeof numberHoles>) => n.holes.map((h) => [h.frame, h.rev, h.k]);
+    expect(key(numberHoles(noisy, { ...opts, holeMinGap: 0.5 }))).toEqual(key(numberHoles(events, opts)));
+    expect(key(numberHoles(noisy, opts))).not.toEqual(key(numberHoles(events, opts)));
   });
 
   it('Rückwärtsdrehen mehrerer Löcher vor dem ersten Nullpunkt', () => {

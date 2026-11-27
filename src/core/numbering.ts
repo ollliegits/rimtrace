@@ -7,6 +7,8 @@ export interface NumEvent {
   /** +1 vorwärts, −1 rückwärts, 0 = kein Durchgang (Bett kehrte im Fenster um). */
   dir: number;
   size: number;
+  /** Zurückgelegter Bettweg bis zum Ereignis (px, Summe der Beträge). */
+  pos?: number;
 }
 
 export interface NumberedHole {
@@ -40,12 +42,30 @@ const mod = (a: number, n: number) => ((a % n) + n) % n;
  */
 export function numberHoles(
   events: NumEvent[],
-  { marker, spokes, valveRatio }: { marker: 'ventil' | 'aufkleber'; spokes: number; valveRatio: number },
+  { marker, spokes, valveRatio, holeMinGap = 0 }: { marker: 'ventil' | 'aufkleber'; spokes: number; valveRatio: number; holeMinGap?: number },
 ): Numbering {
-  const passes = events.filter((e) => e.dir !== 0);
-  const sizes = passes.filter((e) => e.kind === 'hole').map((e) => e.size);
+  const moving = events.filter((e) => e.dir !== 0);
+  const sizes = moving.filter((e) => e.kind === 'hole').map((e) => e.size);
   const typical = sizes.length ? median(sizes) : 0;
   const isMarker = (e: NumEvent) => (marker === 'aufkleber' ? e.kind === 'sticker' : e.kind === 'hole' && typical > 0 && e.size > valveRatio * typical);
+
+  // Störereignis: Loch in gleicher Richtung viel näher am vorigen als der übliche Lochabstand im Bettweg. Ein Fehlzähler
+  // würde alle folgenden Speichen um eins verschieben.
+  const gaps: number[] = [];
+  let prevHole: NumEvent | undefined;
+  for (const e of moving) {
+    if (e.kind !== 'hole' || isMarker(e) || e.pos === undefined) continue;
+    if (prevHole && prevHole.dir === e.dir) gaps.push(e.pos - (prevHole.pos as number));
+    prevHole = e;
+  }
+  const minGap = holeMinGap * (gaps.length ? median(gaps) : 0);
+  let last: NumEvent | undefined;
+  const passes = moving.filter((e) => {
+    if (e.kind !== 'hole' || isMarker(e) || e.pos === undefined) return true;
+    if (last && last.dir === e.dir && e.pos - (last.pos as number) < minGap) return false;
+    last = e;
+    return true;
+  });
 
   let p = 0;
   const found: { frame: number; ord: number; dir: number }[] = [];
@@ -76,5 +96,5 @@ export function numberHoles(
       } else if (h.ord - starts[r - 1] < spokes) holes.push({ ...h, rev: r, k: h.ord - starts[r - 1] });
     }
   }
-  return { holes, markers: marks.map((m) => m.frame), valveRatios, ignored: events.length - passes.length };
+  return { holes, markers: marks.map((m) => m.frame), valveRatios, ignored: events.length - moving.length };
 }

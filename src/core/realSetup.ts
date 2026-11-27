@@ -46,6 +46,8 @@ export interface RealSetup {
   stickerRise: number;
   /** Ventilloch: größer als dieser Faktor mal die mittlere Lochgröße (Fläche des Dunkelereignisses, unabhängig von der Drehgeschwindigkeit). */
   valveRatio: number;
+  /** Ein Loch im Abstand unter diesem Anteil des üblichen Lochabstands (Bettweg) zum vorigen Loch ist eine Störung. */
+  holeMinGap: number;
   /** Bettstreifen (Videokoordinaten [von, bis]) für die Drehrichtung: Spalten und Zeilen, die nur das Felgenbett mit seinen Löchern zeigen. */
   bedX: number[];
   bedY: number[];
@@ -122,6 +124,7 @@ export const defaultRealSetup: RealSetup = {
   holeRelease: 5,
   stickerRise: 40,
   valveRatio: 2,
+  holeMinGap: 0.5,
   bedX: [445, 525],
   bedY: [580, 900],
   bedMaxShift: 60,
