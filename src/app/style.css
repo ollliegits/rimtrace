@@ -166,6 +166,30 @@ dialog .actions .msg { margin-right: auto; }
 .legend div { display: flex; align-items: center; gap: 8px; line-height: 1.6; }
 .legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; flex: none; }
 
+/* Checkliste und Einrichtungsprüfung: Zustand immer mit Symbol, nicht nur Farbe */
+.checklist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.checklist li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.checklist .ck-mark::before { content: '○'; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-weight: 700; color: var(--muted); border: 2px solid var(--border-strong); }
+.checklist .ck-body { display: grid; gap: 2px; min-width: 0; }
+.checklist .ck-text { font-size: 13px; color: var(--muted); }
+.checklist li[data-state='done'] { border-left-color: var(--ok); }
+.checklist li[data-state='done'] .ck-mark::before { content: '✓'; color: #fff; background: var(--ok); border-color: var(--ok); }
+.checklist li[data-state='warn'] { border-left-color: var(--warn); background: var(--warn-soft); }
+.checklist li[data-state='warn'] .ck-mark::before { content: '!'; color: #fff; background: #c27c00; border-color: #c27c00; }
+.checklist li[data-state='problem'] { border-left-color: var(--bad); background: var(--bad-soft); }
+.checklist li[data-state='problem'] .ck-mark::before { content: '✕'; color: #fff; background: var(--bad); border-color: var(--bad); }
+.checklist li[data-state='problem'] .ck-text { color: var(--text); }
+.probe-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; max-width: 760px; }
+.probe-list li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-left: 4px solid var(--ok); border-radius: var(--radius); background: var(--surface); }
+.probe-list li[data-light='warn'] { border-left-color: #c27c00; background: var(--warn-soft); }
+.probe-list li[data-light='error'] { border-left-color: var(--bad); background: var(--bad-soft); }
+.probe-list .ic { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; background: var(--ok); }
+.probe-list li[data-light='warn'] .ic { background: #c27c00; }
+.probe-list li[data-light='error'] .ic { background: var(--bad); }
+.probe-list .todo, .probe-list .metrics { display: block; font-size: 12px; color: var(--muted); }
+.probe-list .todo { color: var(--text); font-size: 13px; }
+@media (max-width: 640px) { .checklist li { grid-template-columns: 28px 1fr; } .checklist li button { grid-column: 1 / -1; } }
+
 .howto { margin: 8px 0; padding-left: 20px; color: var(--muted); }
 .howto li { margin: 2px 0; }
 .live-big { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 10px; padding: 10px 14px; border-radius: var(--radius); background: var(--surface-2); font-variant-numeric: tabular-nums; }

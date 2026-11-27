@@ -67,7 +67,29 @@
 
         <details class="panel" id="setup" open>
           <summary><h2><span class="num">2 ·</span> Einrichten: Standbild und Messbereiche</h2></summary>
-          <div class="row"><button id="snap" type="button">📷 Standbild vom Handy holen</button> <span id="snapMsg" class="muted" aria-live="polite"></span></div>
+          <ol class="checklist" id="checklist" aria-label="Einrichtung">
+            <li id="ck1" data-state="open">
+              <span class="ck-mark" aria-hidden="true"></span>
+              <div class="ck-body"><b>1 · Laufrad prüfen und an die Kamera senden</b><span class="ck-text" id="ck1Text"></span></div>
+              <button id="ck1Btn" type="button" class="primary">Laufrad senden</button>
+            </li>
+            <li id="ck2" data-state="open">
+              <span class="ck-mark" aria-hidden="true"></span>
+              <div class="ck-body"><b>2 · Standbild vom Handy holen</b><span class="ck-text" id="ck2Text"></span></div>
+              <button id="snap" type="button" class="primary">📷 Standbild holen</button>
+            </li>
+            <li id="ck3" data-state="open">
+              <span class="ck-mark" aria-hidden="true"></span>
+              <div class="ck-body"><b>3 · Messbereiche einrichten und prüfen</b><span class="ck-text" id="ck3Text"></span></div>
+              <button id="probeBtn" type="button">Einrichtung prüfen</button>
+            </li>
+            <li id="ck4" data-state="open">
+              <span class="ck-mark" aria-hidden="true"></span>
+              <div class="ck-body"><b>4 · Bereit zur Messung</b><span class="ck-text" id="ck4Text"></span></div>
+              <button id="ck4Btn" type="button" class="primary big">▶ Start</button>
+            </li>
+          </ol>
+          <span id="snapMsg" class="muted" aria-live="polite"></span>
           <div id="snapWrap">
             <div id="snapEmpty" class="empty">Noch kein Standbild. Nach der Kopplung „Standbild vom Handy holen“ wählen.</div>
             <canvas id="snapView" hidden aria-label="Standbild mit Messbereichen"></canvas>
@@ -78,6 +100,9 @@
               <div><i style="background: #4cc2ff"></i>Bettstreifen</div>
             </div>
           </div>
+          <ul id="probeList" class="probe-list" aria-label="Ergebnis der Einrichtungsprüfung" hidden></ul>
+          <div class="row"><button id="spinBtn" type="button">↻ Probedrehung (eine Runde)</button> <span id="spinMsg" class="muted" aria-live="polite"></span></div>
+          <ul id="spinOut" class="probe-list" aria-label="Ergebnis der Probedrehung" hidden></ul>
           <p class="hint">Rahmen mit der Maus anpassen: Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn. Änderungen werden sofort übernommen und ans Handy gesendet. Feineinstellung als Zahlen unter ⚙ Einstellungen.</p>
         </details>
 

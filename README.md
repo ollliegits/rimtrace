@@ -119,6 +119,10 @@ Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet
 
 **Stromversorgung:** Das Handy muss während der Messung am Ladegerät hängen. Kamera und Auswertung verbrauchen viel Strom, und der Bildschirm kann sich abschalten, wenn der Akku spart.
 
+**Einrichten als Checkliste:** (1) Laufrad senden – fehlt die Felgenbreite oder wird die Konfiguration abgelehnt, steht der Punkt auf „Problem“ mit Knopf „Einstellungen öffnen“, erledigt erst nach Bestätigung des Handys; (2) Standbild holen – erst nach (1), weil Drehung und Spiegelung aus der Konfiguration kommen; (3) Einrichtung prüfen; (4) Start (bei Fehlern aus (3) nur nach Rückfrage).
+
+**Einrichtungsprüfung** (`src/core/setupProbe.ts`, rein auf dem Standbild, läuft am Handy, Schwellen in `PROBE`): Je Messbereich eine Ampel (✓ ok, ! Warnung, ✕ Fehler) am Rahmen und in einer Liste mit Handlungshinweis; die erkannten Kanten erscheinen magenta im Standbild. Geprüft werden Ausschnitt (alle Rahmen darin), Felge (Kontrast ≥ 60 Graustufen, ≥ 80 % der Flankenzeilen mit eindeutigen Kanten, Rand links/rechts frei, Maßstab 0,05–0,5 mm/px), Hornspitzen (Unterkanten, Abstand zum Rahmenrand), Referenz (≥ 80 % Zeilen mit eindeutiger Kante, Streuung ≤ 0,7 px), Lochfenster (liegt auf der Felge) und Bettstreifen (≥ 40 % Felge im Streifen, Struktur). Meldungen wie „Felge nicht erkannt“ im Ergebnis verweisen auf den passenden Bereich. „Probedrehung (eine Runde)“ misst ohne zu speichern und prüft Löcher, Nullpunkt und verworfene Bilder.
+
 **Messbereiche einstellen** (am Standbild; die Felge dabei in der ungünstigsten Lage betrachten, also bei starkem Eiern an den Rändern des Ausschlags; 1 mm ≈ 4 px bei 0,24 mm/px):
 
 - **Felge (gelb):** Beide Seiten der Felge brauchen im Rahmen einen hellen Rand, auch bei größtem Seitenschlag (sonst „Felge nicht erkannt“). Breit genug ziehen, mindestens Felgenbreite plus 2 × Ausschlag plus Rand. Oben mindestens 50 px über die Hornspitzen (dort werden die Flanken gemessen), unten knapp unter die tiefsten Hornspitzen inklusive Höhenschlag. Darunter darf kein anderes Dunkles im Rahmen liegen (Speichen, Nippel, Hand).
@@ -132,7 +136,7 @@ Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet
 2. Am iPhone `camera.html` öffnen (Zertifikatswarnung bestätigen), „Kamera starten“, Kamera freigeben, „QR-Code scannen“ und den Offer-QR vom Notebook-Bildschirm lesen. Gelingt das Scannen nicht, den Code aus dem Textfeld einfügen.
 3. Den Antwort-QR vom iPhone-Bildschirm vor die Notebook-Webcam halten (oder Text einfügen). Beide Seiten zeigen „verbunden“. Notieren: Kandidatenpaar (Diagnose) und ob QR-Scan funktionierte.
 4. In der Steuerung Felgenbreite (mm), Speichenzahl, Nullpunkt, Seiten eintragen und „Übernehmen und senden“.
-5. „Standbild vom Handy holen“: Das Bild erscheint mit Overlay; Messbereiche im JSON anpassen, bis sie passen.
+5. „Standbild vom Handy holen“: Das Bild erscheint mit Overlay; Messbereiche anpassen, bis alle Ampeln grün sind.
 6. Start, Rad mindestens 2 volle Runden in Fahrtrichtung drehen, Stopp. Ein Ergebnisdiagramm 1…N mit je einer Kurve pro Umdrehung, die Prüfung und die Maßnahmen erscheinen.
 7. Diagnose am Handy ablesen: Auflösung und Bildrate laut `getSettings()`, gemessene Bildrate, Rechenzeit Mittel/p95, verworfene Bilder, Lochzustand, QR-Version.
 

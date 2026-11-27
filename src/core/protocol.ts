@@ -2,6 +2,7 @@ import { defaultRealSetup, realSetupError, type RealSetup } from './realSetup';
 import type { RealResult } from './realAnalyzer';
 import type { SessionStatus } from './session';
 import { parseSetup } from './setup';
+import type { ProbeResult } from './setupProbe';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -21,6 +22,8 @@ export type Message =
   | { t: 'config-ok' }
   | { t: 'snapshot-request'; maxSize: number }
   | { t: 'snapshot'; id: number; index: number; count: number; data: string; width: number; height: number; fullWidth: number; fullHeight: number }
+  | { t: 'probe-request' }
+  | { t: 'probe'; probe: ProbeResult }
   | { t: 'start' }
   | { t: 'stop' }
   | { t: 'status'; camera: CameraStatus; session?: SessionStatus }
@@ -51,6 +54,7 @@ export function decode(text: string): { message: Message } | { error: string } {
     case 'start':
     case 'stop':
     case 'config-ok':
+    case 'probe-request':
       return { message: { t: raw.t } };
     case 'config': {
       if (!isObj(raw.setup)) return { error: 'config: setup fehlt' };
@@ -69,6 +73,14 @@ export function decode(text: string): { message: Message } | { error: string } {
       if (!isNum(id) || !isNum(index) || !isNum(count) || !isNum(width) || !isNum(height) || !isNum(fullWidth) || !isNum(fullHeight) || typeof data !== 'string') return { error: 'snapshot: Felder fehlen' };
       if (!Number.isInteger(index) || !Number.isInteger(count) || count < 1 || index < 0 || index >= count) return { error: 'snapshot: ungültiger Teil' };
       return { message: { t: 'snapshot', id, index, count, data, width, height, fullWidth, fullHeight } };
+    }
+    case 'probe': {
+      const p = raw.probe;
+      const lights = ['ok', 'warn', 'error'];
+      const areaOk = (a: unknown) =>
+        isObj(a) && typeof a.area === 'string' && lights.includes(a.light as string) && typeof a.text === 'string' && Array.isArray(a.metrics) && a.metrics.every((m) => isObj(m) && typeof m.label === 'string' && typeof m.value === 'string');
+      if (!isObj(p) || !Array.isArray(p.areas) || !p.areas.every(areaOk) || !isObj(p.overlay)) return { error: 'probe: ungültig' };
+      return { message: { t: 'probe', probe: p as unknown as ProbeResult } };
     }
     case 'status': {
       const c = raw.camera;

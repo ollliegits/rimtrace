@@ -1,5 +1,5 @@
 import './style.css';
-import { splitBase64, type CameraStatus, type Message, type RealResult, type RealSetup, type SessionStatus } from '../core';
+import { probeSetup, splitBase64, type CameraStatus, type Message, type RealResult, type RealSetup, type SessionStatus } from '../core';
 import { CameraSource } from './cameraSource';
 import type { FromWorker, ToWorker } from './analysis.worker';
 import { Link, type LinkState } from './rtc/link';
@@ -81,6 +81,15 @@ async function sendSnapshot(maxSize: number): Promise<void> {
   }
 }
 
+function sendProbe(): void {
+  const frame = source?.current;
+  if (!setup || !frame) {
+    send({ t: 'error', message: 'Einrichtungsprüfung nicht möglich: ' + (setup ? 'noch kein Kamerabild' : 'keine Konfiguration empfangen') });
+    return;
+  }
+  send({ t: 'probe', probe: probeSetup(frame.image, setup) });
+}
+
 function onMessage(m: Message): void {
   switch (m.t) {
     case 'hello':
@@ -94,6 +103,9 @@ function onMessage(m: Message): void {
       break;
     case 'snapshot-request':
       void sendSnapshot(m.maxSize);
+      break;
+    case 'probe-request':
+      sendProbe();
       break;
     case 'start':
       if (!source || !setup) {

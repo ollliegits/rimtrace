@@ -15,5 +15,6 @@ export * from './recommend';
 export * from './sdp';
 export * from './session';
 export * from './setup';
+export * from './setupProbe';
 export * from './silhouette';
 export * from './truing';

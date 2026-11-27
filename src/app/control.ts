@@ -4,14 +4,19 @@ import {
   describeTruing,
   formatTurns,
   parseSetup,
+  probeAreasOf,
   realSetupError,
   reviveNaN,
   sideName,
   SnapshotAssembler,
   spokeSides,
   truingPlan,
+  worstLight,
+  type AreaProbe,
   type CameraStatus,
+  type Light,
   type Message,
+  type ProbeResult,
   type RealResult,
   type RealSetup,
   type SessionStatus,
@@ -50,6 +55,11 @@ const assembler = new SnapshotAssembler();
 let configOk = false;
 let snapshotSeen = false;
 let currentStep = 0;
+// Einrichtungsprüfung (vom Handy am aktuellen Bild gemessen)
+let probe: ProbeResult | undefined;
+let probePending = false;
+let probeTimer: ReturnType<typeof setTimeout> | undefined;
+let probeRun = false;
 
 function warn(text: string): void {
   $('warn').textContent = text;
@@ -65,17 +75,25 @@ function setText(id: string, text: string, cls = ''): void {
 }
 
 // Meldungen der Auswertung mit einem Hinweis, was zu tun ist.
-const hints: [RegExp, string][] = [
-  [/Felge nicht erkannt/, 'Felgenrahmen (gelb) am Standbild prüfen: beidseitig heller Rand, darunter nichts Dunkles.'],
-  [/kein Nullpunkt/, 'Der blaue Bettstreifen muss das Ventilloch erfassen; Nullpunkt in den Einstellungen prüfen.'],
+// Dritter Wert: Verweis auf die Einrichtungsprüfung, wenn die Ursache in den Messbereichen liegen kann.
+const hints: [RegExp, string, boolean?][] = [
+  [/Felge nicht erkannt/, 'Felgenrahmen (gelb) am Standbild prüfen: beidseitig heller Rand, darunter nichts Dunkles.', true],
+  [/kein Nullpunkt/, 'Der blaue Bettstreifen muss das Ventilloch erfassen; Nullpunkt in den Einstellungen prüfen.', true],
   [/volle Umdrehung/, 'Mindestens 2 volle Runden drehen, erst danach Stopp.'],
-  [/statt \d+ Löcher/, 'Speichenzahl prüfen; gleichmäßig drehen; Bettstreifen (blau) nur über das Felgenbett legen.'],
+  [/statt \d+ Löcher/, 'Speichenzahl prüfen; gleichmäßig drehen; Bettstreifen (blau) nur über das Felgenbett legen.', true],
   [/weichen voneinander ab/, 'Rad ruhig und gleichmäßig drehen; Halterung von Handy und Referenz auf Wackeln prüfen.'],
   [/zu schnell/i, 'Langsamer und gleichmäßig drehen (unter etwa 0,4 Speichen pro Bild).'],
-  [/nicht auswertbar/, 'Messbereiche Felge (gelb) und Referenz (grün) am Standbild prüfen.'],
+  [/nicht auswertbar/, 'Messbereiche Felge (gelb) und Referenz (grün) am Standbild prüfen.', true],
   [/ohne Durchgang/, 'Im Bereich der Löcher nicht hin- und herdrehen.'],
 ];
-const hintFor = (msg: string) => hints.find(([re]) => re.test(msg))?.[1];
+const areaNames: Record<AreaProbe['area'], string> = { crop: 'Ausschnitt', rim: 'Felge', tips: 'Hornspitzen', ref: 'Referenz', hole: 'Lochfenster', bed: 'Bettstreifen' };
+const problemAreas = () => probe?.areas.filter((a) => a.light !== 'ok') ?? [];
+function hintFor(msg: string): string | undefined {
+  const h = hints.find(([re]) => re.test(msg));
+  if (!h) return undefined;
+  const p = problemAreas()[0];
+  return h[2] && p ? `${h[1]} Siehe Einrichtungsprüfung: ${areaNames[p.area]} – ${p.text}.` : h[1];
+}
 
 function friendlySetupError(msg: string): string {
   if (msg.startsWith('rimWidthMm')) return 'Felgenbreite fehlt: Außenbreite der Felge mit dem Messschieber messen und unter ⚙ Einstellungen eintragen. Ohne sie startet keine Messung.';
@@ -166,6 +184,7 @@ function applyConfig(): boolean {
     setCfgMsg('error', friendlySetupError(s));
     return false;
   }
+  if (snapshotSeen) probePending = true;
   setup = s;
   localStorage.setItem(CONFIG_KEY, JSON.stringify(s));
   clearTimeout(ackTimer);
@@ -190,7 +209,11 @@ function setLinkState(state: LinkState, detail: string): void {
   $('linkStatus').dataset.state = linkBadge[state] ?? 'idle';
   $('relink').hidden = !(state === 'getrennt' || state === 'fehler' || state === 'verbunden');
   $('pairing').hidden = state === 'verbunden';
-  if (state !== 'verbunden') configOk = false;
+  if (state !== 'verbunden') {
+    configOk = false;
+    probePending = false;
+    probeRun = false;
+  }
   if (state === 'verbunden') {
     stopScan?.();
     stopWebcam();
@@ -298,6 +321,13 @@ function onMessage(m: Message): void {
       clearTimeout(ackTimer);
       configOk = true;
       setCfgMsg('ok', `✓ vom Handy bestätigt (${new Date().toLocaleTimeString()})`);
+      if (snapshotSeen) requestProbe();
+      break;
+    case 'probe':
+      probe = m.probe;
+      probePending = false;
+      renderProbe();
+      drawSnapshot();
       break;
     case 'status':
       camera = m.camera;
@@ -305,6 +335,11 @@ function onMessage(m: Message): void {
       lastStatusAt = Date.now();
       break;
     case 'result':
+      if (probeRun) {
+        probeRun = false;
+        showSpin(m.result);
+        break;
+      }
       localStorage.setItem(RESULT_KEY, JSON.stringify({ at: Date.now(), result: m.result, setup }));
       showResult(m.result, setup, Date.now());
       ($('setup') as HTMLDetailsElement).open = false;
@@ -316,10 +351,53 @@ function onMessage(m: Message): void {
       break;
     }
     case 'error':
+      probePending = false;
       warn(`Handy meldet: ${m.message}`);
       break;
     default:
   }
+}
+
+// Einrichtungsprüfung: das Handy wertet sein aktuelles Bild aus; kurz entprellt, damit die Kamera zuerst die neue Konfiguration übernimmt.
+function requestProbe(): void {
+  clearTimeout(probeTimer);
+  probePending = true;
+  probeTimer = setTimeout(() => {
+    if (!link?.send({ t: 'probe-request' })) probePending = false;
+  }, 300);
+}
+
+const lightLabel: Record<Light, string> = { ok: 'in Ordnung', warn: 'Warnung', error: 'Fehler' };
+const lightIcon = (l: Light) => `<span class="ic" role="img" aria-label="${lightLabel[l]}">${lightSymbol[l]}</span>`;
+
+function renderProbe(): void {
+  $('probeList').hidden = !probe;
+  if (!probe) return;
+  $('probeList').innerHTML = probe.areas
+    .map((a) => {
+      const metrics = a.metrics.map((m) => `${esc(m.label)}: ${esc(m.value)}`).join(' · ');
+      return (
+        `<li data-light="${a.light}">${lightIcon(a.light)}<div><b>${areaNames[a.area]}</b> – ${esc(a.text)}` +
+        `${a.hint ? `<span class="todo">→ ${esc(a.hint)}</span>` : ''}${metrics ? `<span class="metrics">${metrics}</span>` : ''}</div></li>`
+      );
+    })
+    .join('');
+}
+
+// Probedrehung: ein normaler Messlauf, dessen Ergebnis nur zusammengefasst und nicht gespeichert wird.
+function showSpin(r: RealResult): void {
+  const events = r.profile.events ?? [];
+  const holes = events.filter((e) => e.kind === 'hole' && e.dir !== 0).length;
+  const spokes = setup?.spokes ?? 0;
+  const discarded = r.check.discardedFrames ?? 0;
+  const rows: [Light, string][] = [
+    holes >= spokes - 1 ? ['ok', `Löcher erkannt: ${holes} (Speichenzahl ${spokes})`] : ['warn', `Nur ${holes} Löcher erkannt, bei ${spokes} Speichen erwartet. Bettstreifen, Lochfenster und Speichenzahl prüfen; eine volle Runde drehen.`],
+    r.profile.markers.length ? ['ok', `Nullpunkt erkannt (${r.profile.markers.length}×)`] : ['warn', 'Kein Nullpunkt erkannt. Der Bettstreifen muss Aufkleber bzw. Ventilloch erfassen.'],
+    discarded <= 0.1 * r.frames ? ['ok', `Verworfene Bilder: ${discarded} von ${r.frames}`] : ['warn', `${discarded} von ${r.frames} Bildern nicht auswertbar. Felge und Referenz prüfen.`],
+  ];
+  $('spinOut').hidden = false;
+  $('spinOut').innerHTML = rows.map(([l, text]) => `<li data-light="${l}">${lightIcon(l)}<div>${esc(text)}</div></li>`).join('');
+  $('spinMsg').textContent = 'Probedrehung beendet (nicht als Messung gespeichert).';
 }
 
 // Standbild
@@ -335,6 +413,7 @@ function showSnapshot(bytes: Uint8Array, width: number, fullWidth: number): void
     $('snapView').hidden = false;
     $('snapLegend').hidden = false;
     drawSnapshot();
+    requestProbe();
     $('snapMsg').textContent = `${img.width}×${img.height} (Maßstab ${snapshotScale.toFixed(3)} zum Vollbild)`;
   };
   img.src = snapshotBlobUrl;
@@ -380,15 +459,64 @@ function drawSnapshot(): void {
       ctx.fillRect(x * k - h, y * k - h, 2 * h, 2 * h);
       ctx.strokeRect(x * k - h, y * k - h, 2 * h, 2 * h);
     }
+    if (probe && !probePending) drawBadge(ctx, def, b, u);
   }
+  if (probe && !probePending) drawOverlay(ctx, probe.overlay, k, u);
+}
+
+const lightColor: Record<Light, string> = { ok: '#1e7a46', warn: '#c27c00', error: '#b3261e' };
+const lightSymbol: Record<Light, string> = { ok: '✓', warn: '!', error: '✕' };
+
+// Ampel als Symbol (nicht nur Farbe) an der oberen rechten Ecke des Rahmens.
+function drawBadge(ctx: CanvasRenderingContext2D, def: BoxDef, b: Box, u: number): void {
+  const light = worstLight(probe!.areas.filter((a) => probeAreasOf[def.key].includes(a.area)));
+  const [cx, cy, r] = [b.x1 * viewK - 12 * u, b.y0 * viewK + 12 * u, 10 * u];
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+  ctx.fillStyle = lightColor[light];
+  ctx.fill();
+  ctx.lineWidth = 2 * u;
+  ctx.strokeStyle = '#fff';
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(lightSymbol[light], cx, cy + u);
+  ctx.textAlign = 'start';
+  ctx.textBaseline = 'alphabetic';
+}
+
+// Was die Prüfung erkannt hat: Flanken, Hornspitzen, Referenz, Lochfenster.
+function drawOverlay(ctx: CanvasRenderingContext2D, o: ProbeResult['overlay'], k: number, u: number): void {
+  ctx.lineWidth = 1.5 * u;
+  ctx.strokeStyle = '#ff2fb3';
+  const line = (x0: number, y0: number, x1: number, y1: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x0 * k, y0 * k);
+    ctx.lineTo(x1 * k, y1 * k);
+    ctx.stroke();
+  };
+  if (o.flankRows && o.left !== undefined && o.right !== undefined) {
+    line(o.left, o.flankRows[0], o.left, o.flankRows[1]);
+    line(o.right, o.flankRows[0], o.right, o.flankRows[1]);
+  }
+  for (const tip of [o.tipLeft, o.tipRight]) {
+    if (!tip) continue;
+    ctx.beginPath();
+    ctx.arc(tip[0] * k, tip[1] * k, 4 * u, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+  if (o.ref && o.refRows) line(o.ref[0], o.refRows[0], o.ref[0], o.refRows[1]);
+  if (o.holeWindow) ctx.strokeRect(o.holeWindow[0] * k, o.holeWindow[1] * k, o.holeWindow[2] * k, o.holeWindow[2] * k);
 }
 
 // Messbereiche am Standbild mit der Maus: Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn.
 type Box = { x0: number; y0: number; x1: number; y1: number };
-type BoxDef = { color: string; label: string; get(s: RealSetup): Box; set(a: Record<string, number[]>, b: Box): void };
+type BoxDef = { key: keyof typeof probeAreasOf; color: string; label: string; get(s: RealSetup): Box; set(a: Record<string, number[]>, b: Box): void };
 
 const handleCss = 6;
-const xyBox = (color: string, label: string, kx: 'rimX' | 'refX' | 'bedX', ky: 'rimY' | 'refY' | 'bedY'): BoxDef => ({
+const xyBox = (key: BoxDef['key'], color: string, label: string, kx: 'rimX' | 'refX' | 'bedX', ky: 'rimY' | 'refY' | 'bedY'): BoxDef => ({
+  key,
   color,
   label,
   get: (s) => ({ x0: s[kx][0], x1: s[kx][1], y0: s[ky][0], y1: s[ky][1] }),
@@ -399,6 +527,7 @@ const xyBox = (color: string, label: string, kx: 'rimX' | 'refX' | 'bedX', ky: '
 });
 const boxDefs: BoxDef[] = [
   {
+    key: 'crop',
     color: '#ff4c4c',
     label: 'Ausschnitt',
     get: (s) => ({ x0: s.crop[0], y0: s.crop[1], x1: s.crop[0] + s.crop[2], y1: s.crop[1] + s.crop[3] }),
@@ -406,9 +535,9 @@ const boxDefs: BoxDef[] = [
       a.crop = [b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0];
     },
   },
-  xyBox('#ffe066', 'Felge', 'rimX', 'rimY'),
-  xyBox('#6fe39a', 'Referenz', 'refX', 'refY'),
-  xyBox('#4cc2ff', 'Bettstreifen', 'bedX', 'bedY'),
+  xyBox('rim', '#ffe066', 'Felge', 'rimX', 'rimY'),
+  xyBox('ref', '#6fe39a', 'Referenz', 'refX', 'refY'),
+  xyBox('bed', '#4cc2ff', 'Bettstreifen', 'bedX', 'bedY'),
 ];
 
 type Drag = { def: BoxDef; start: Box; x: number; y: number; cx?: 0 | 1; cy?: 0 | 1 };
@@ -641,7 +770,52 @@ function renderLive(): void {
     row('Verbindung', `${link?.state ?? 'nicht gekoppelt'}${pair ? ' · ' + pair : ''}`),
     row('ICE', link?.diag() ?? '–'),
   ].join('');
+  renderChecklist(linked, running);
   renderSteps(linked, running);
+}
+
+type CkState = 'open' | 'done' | 'warn' | 'problem';
+
+function setCk(n: number, state: CkState, text: string, button?: { disabled: boolean; label?: string }): void {
+  const li = $(`ck${n}`);
+  if (li.dataset.state !== state) li.dataset.state = state;
+  setText(`ck${n}Text`, text, 'ck-text');
+  if (button) {
+    const b = $<HTMLButtonElement>(n === 1 ? 'ck1Btn' : n === 2 ? 'snap' : n === 3 ? 'probeBtn' : 'ck4Btn');
+    b.disabled = button.disabled;
+    if (button.label && b.textContent !== button.label) b.textContent = button.label;
+  }
+}
+
+// Checkliste im Schritt „Einrichten“: jeder Punkt zeigt Zustand und den nächsten Handgriff.
+function renderChecklist(linked: boolean, running: boolean): void {
+  const cur = currentSetup();
+  const missingRim = !(Number($<HTMLInputElement>('rimWidthMm').value) > 0);
+  const err = typeof cur === 'string' ? friendlySetupError(cur) : '';
+  if (!linked) setCk(1, 'open', 'Erst das Handy koppeln.', { disabled: true, label: 'Laufrad senden' });
+  else if (configOk) setCk(1, 'done', '✓ Vom Handy bestätigt.', { disabled: false, label: 'Erneut senden' });
+  else if (missingRim) setCk(1, 'problem', 'Felgenbreite fehlt (Pflichtfeld). Ohne sie bekommt die Kamera keine Konfiguration.', { disabled: false, label: 'Einstellungen öffnen' });
+  else if (err) setCk(1, 'problem', err, { disabled: false, label: 'Einstellungen öffnen' });
+  else setCk(1, 'open', 'Noch nicht an die Kamera gesendet.', { disabled: false, label: 'Laufrad prüfen und senden' });
+
+  if (!configOk) setCk(2, 'open', 'Erst Laufrad-Konfiguration an die Kamera senden: Drehung und Spiegelung des Bildes kommen daraus.', { disabled: true });
+  else setCk(2, snapshotSeen ? 'done' : 'open', snapshotSeen ? '✓ Standbild erhalten. Bei Änderungen am Aufbau neu holen.' : 'Handy fest aufstellen, dann Standbild holen.', { disabled: false });
+
+  const bad = problemAreas();
+  const errors = bad.filter((a) => a.light === 'error');
+  const first = (list: AreaProbe[]) => list[0] && `${areaNames[list[0].area]} – ${list[0].text}`;
+  if (!snapshotSeen) setCk(3, 'open', 'Erst Standbild holen.', { disabled: true });
+  else if (probePending) setCk(3, 'open', 'Prüfung läuft …', { disabled: false });
+  else if (!probe) setCk(3, 'open', 'Rahmen am Standbild einstellen; die Prüfung läuft danach automatisch.', { disabled: false });
+  else if (errors.length) setCk(3, 'problem', `${errors.length} Fehler: ${first(errors)}. Siehe Liste unter dem Standbild.`, { disabled: false });
+  else if (bad.length) setCk(3, 'warn', `${bad.length} Hinweis(e): ${first(bad)}.`, { disabled: false });
+  else setCk(3, 'done', '✓ Alle Messbereiche erkannt.', { disabled: false });
+
+  const ready = linked && configOk && !running;
+  if (!configOk) setCk(4, 'open', 'Erst Schritte 1 und 2 abschließen.', { disabled: true });
+  else if (errors.length && !probePending) setCk(4, 'problem', 'Offene Probleme aus Schritt 3: Start nur nach Bestätigung.', { disabled: !ready });
+  else setCk(4, 'done', running ? 'Messung läuft.' : 'Rad ansetzen, Start drücken, mindestens 2 volle Runden drehen.', { disabled: !ready });
+  $('spinBtn').toggleAttribute('disabled', !ready);
 }
 
 // Schrittleiste: Koppeln → Einrichten → Messen → Maßnahmen umsetzen
@@ -687,6 +861,8 @@ setInterval(() => {
 
 function startMeasurement(): void {
   const msg = $('runMsg');
+  const errors = problemAreas().filter((a) => a.light === 'error');
+  if (errors.length && !probePending && !confirm(`Die Einrichtungsprüfung meldet offene Probleme:\n\n${errors.map((a) => `• ${areaNames[a.area]}: ${a.text}`).join('\n')}\n\nTrotzdem messen?`)) return;
   if (!applyConfig()) {
     msg.className = 'error';
     msg.textContent = $('cfgMsg').textContent ?? '';
@@ -698,6 +874,7 @@ function startMeasurement(): void {
     msg.textContent = 'Nicht verbunden – zuerst das Handy koppeln.';
     return;
   }
+  probeRun = false;
   msg.className = 'muted';
   msg.textContent = `Start gesendet (${new Date().toLocaleTimeString()})`;
   ($('setup') as HTMLDetailsElement).open = false;
@@ -739,6 +916,18 @@ $('snap').onclick = () => {
   $('snapMsg').textContent = 'angefordert …';
 };
 $('start').onclick = startMeasurement;
+$('ck4Btn').onclick = startMeasurement;
+$('ck1Btn').onclick = () => {
+  if (!applyConfig() || !rimOk()) openSettings(Number($<HTMLInputElement>('rimWidthMm').value) > 0 ? undefined : 'rimWidthMm');
+};
+$('probeBtn').onclick = requestProbe;
+$('spinBtn').onclick = () => {
+  if (!applyConfig()) return;
+  if (!link?.send({ t: 'start' })) return void ($('spinMsg').textContent = 'Nicht verbunden – zuerst das Handy koppeln.');
+  probeRun = true;
+  $('spinOut').hidden = true;
+  $('spinMsg').textContent = 'Probedrehung läuft: eine volle Runde langsam drehen, dann Stopp.';
+};
 $('next').onclick = () => {
   startMeasurement();
   $('measure').scrollIntoView({ block: 'start' });

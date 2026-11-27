@@ -73,6 +73,11 @@ export class CameraSource implements FrameSource {
     }
   }
 
+  /** Letztes Bild, ohne es zu verbrauchen. */
+  get current(): Frame | null {
+    return this.latest;
+  }
+
   read(): Frame | null {
     const f = this.latest;
     this.latest = null;
