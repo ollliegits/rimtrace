@@ -451,7 +451,7 @@ function showResult(r: RealResult, s: RealSetup | undefined, at: number): void {
     const plan = truingPlan(p.all, spokeSides(s), { toleranceLateralMm: s.toleranceLateralMm, toleranceHeightMm: s.toleranceHeightMm });
     const w = plan.widthSpokes;
     $('actions').innerHTML = plan.actions.length
-      ? plan.actions.map((a) => `<li class="${a.verb}"><b>${describeTruing(a, { firstSpoke: 1, sideName: (x) => sideName(s, x) })}</b></li>`).join('')
+      ? plan.actions.map((a) => `<li class="${a.verb}"><span class="side">${a.side === 'left' ? '◀' : '▶'}</span> <b>${describeTruing(a, { firstSpoke: 1, sideName: (x) => sideName(s, x) })}</b></li>`).join('')
       : '<li class="muted">alles innerhalb der Toleranz</li>';
     $('planInfo').textContent = plan.actions.length
       ? `Auslenkung etwa ${w.lateral} Speichen breit (Seite), ${w.height} (Höhe). Erwartet danach: Seite ±${plan.residual.lateralMm.toFixed(1)} mm, Höhe ±${plan.residual.heightMm.toFixed(1)} mm. Nur Startwerte des Modells: danach neu messen.`
