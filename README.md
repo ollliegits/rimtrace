@@ -21,6 +21,14 @@ npm run build     # Typprüfung + Produktions-Build (BASE_PATH=/unterpfad/ setzt
 
 Seiten: `index.html` (Rollenwahl), `control.html` (Steuerung, Notebook), `camera.html` (Kamera, iPhone), `dev.html` (Entwicklerseite: Generator, Videodatei).
 
+### Oberfläche
+
+Helle Designsprache wie [bike-geometry](https://ollliegits.github.io/bike-geometry/): gemeinsames Stylesheet `src/app/style.css` (CSS-Variablen, Kopfzeile mit Akzentstreifen, Panels, Karten, Statusplaketten, Dialog) und Icon `public/favicon.svg` für alle Seiten.
+
+- **Startseite:** zwei Kacheln „Steuerung (Notebook)“ und „Kamera (iPhone)“.
+- **Steuerung:** Schrittleiste Koppeln → Einrichten → Messen → Maßnahmen umsetzen mit Hinweis zum nächsten Schritt; Verbindungs- und Messstatus immer in der Kopfzeile. Einstellungen (Felgenbreite usw., JSON-Feineinstellung) im Dialog „⚙ Einstellungen“, Zusammenfassung in der Seitenleiste. Kopplung nur sichtbar, solange nicht verbunden; Einrichten (Standbild mit Legende) klappt nach dem Start ein. Maßnahmen groß (aus 1–2 m lesbar): Speichennummer, Seite als Text plus Kürzel AS/BS (Antriebsseite gefüllt, Bremsscheibenseite umrandet), Umdrehungen, „anziehen“ (gefüllt) bzw. „lösen“ (gestrichelt). Prüfmeldungen und Live-Warnungen mit Handlungshinweis; Knopf „Alles umgesetzt – nächste Messung“ startet die nächste Messung. Live-Tabelle, ICE, Lochliste, Rohereignisse und Bettweg unter „Diagnose und Rohdaten“.
+- **Kamera:** mobil optimiert (Safe Areas, Touch-Ziele ≥ 44 px), großer Status mit nächstem Schritt, Diagnose eingeklappt.
+
 ## Aufbau
 
 ```

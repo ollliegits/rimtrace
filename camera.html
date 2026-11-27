@@ -2,42 +2,57 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2a7a84" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>RimTrace – Kamera</title>
   </head>
-  <body>
-    <header>
-      <h1>RimTrace <small>Kamera (Handy) · <span id="link">nicht gekoppelt</span></small></h1>
-      <a href="./">Start</a>
+  <body class="camera-page">
+    <header class="app-header">
+      <a class="brand" href="./" title="Zur Startseite"><img src="/favicon.svg" alt="" aria-hidden="true" /><span>RimTrace</span></a>
+      <span class="page-title">Kamera</span>
+      <span class="spacer"></span>
+      <span class="status" id="linkStatus" data-state="idle"><span class="dot" aria-hidden="true"></span><b id="link">nicht gekoppelt</b></span>
     </header>
-    <div id="warn" class="warn" hidden></div>
-    <main>
-      <section class="card">
-        <h2>1 · Kamera</h2>
-        <p><button id="camStart">Kamera starten</button> <span id="camMsg" class="muted"></span></p>
+    <div id="warn" class="alert" role="alert" hidden></div>
+    <main class="stack">
+      <section class="hero" id="hero" data-state="idle" aria-live="polite">
+        <div class="state" id="heroState">Kamera aus</div>
+        <p id="heroHint">Kamera starten, dann den QR-Code der Steuerung scannen.</p>
+      </section>
+
+      <section class="panel" id="camera" aria-labelledby="camTitle">
+        <h2 id="camTitle"><span class="num">1 ·</span> Kamera</h2>
+        <button id="camStart" class="primary big block" type="button">📷 Kamera starten</button>
+        <p id="camMsg" class="muted" aria-live="polite"></p>
         <div id="preview"></div>
       </section>
 
-      <section class="card" id="pairing">
-        <h2>2 · Mit der Steuerung koppeln</h2>
-        <p class="muted">Am Notebook zuerst die Steuerung öffnen und „Kopplung starten“ wählen. Dann hier den Offer-QR mit der Kamera scannen.</p>
-        <p><button id="scan">QR-Code scannen</button> <button id="relink" hidden>Neu koppeln</button></p>
-        <details><summary>Code stattdessen einfügen</summary>
-          <textarea id="offerIn" rows="3" spellcheck="false" placeholder="Offer-Code der Steuerung"></textarea>
-          <p><button id="offerApply">Offer übernehmen</button></p>
+      <section class="panel" id="pairing" aria-labelledby="pairTitle">
+        <h2 id="pairTitle"><span class="num">2 ·</span> Mit der Steuerung koppeln</h2>
+        <p class="muted">Am Notebook die Steuerung öffnen und „Kopplung starten“ wählen. Dann hier den QR-Code vom Notebook-Bildschirm scannen.</p>
+        <div class="row">
+          <button id="scan" class="primary big block" type="button">QR-Code scannen</button>
+          <button id="relink" class="big block" type="button" hidden>Neu koppeln</button>
+        </div>
+        <details class="more" style="margin-top: 10px">
+          <summary>Code stattdessen einfügen</summary>
+          <textarea id="offerIn" rows="3" spellcheck="false" placeholder="Offer-Code der Steuerung" aria-label="Offer-Code der Steuerung"></textarea>
+          <p><button id="offerApply" class="big" type="button">Offer übernehmen</button></p>
         </details>
         <div id="answerBox" hidden>
-          <p>Diesen Antwort-QR am Notebook von der Webcam scannen lassen:</p>
-          <canvas id="answerQr" style="width: 280px"></canvas>
-          <p id="answerInfo" class="muted"></p>
-          <textarea id="answerOut" rows="3" readonly></textarea>
+          <h3 style="margin-top: 12px">Diesen Antwort-QR vor die Webcam des Notebooks halten</h3>
+          <canvas id="answerQr" class="qr"></canvas>
+          <p id="answerInfo" class="hint"></p>
+          <details class="more"><summary>Antwort als Text</summary><textarea id="answerOut" rows="3" readonly aria-label="Antwort-Code"></textarea></details>
         </div>
       </section>
 
-      <section class="card" id="diag">
-        <h2>Diagnose</h2>
+      <details class="panel" id="diag">
+        <summary><h2>Diagnose</h2></summary>
         <table><tbody id="diagRows"></tbody></table>
-      </section>
+      </details>
     </main>
     <script type="module" src="/src/app/camera.ts"></script>
   </body>

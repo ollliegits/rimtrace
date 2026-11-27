@@ -2,19 +2,38 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2a7a84" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/app/style.css" />
     <title>RimTrace</title>
   </head>
   <body>
-    <header><h1>RimTrace <small>Seiten- und Höhenschlag beim Zentrieren</small></h1></header>
-    <main>
-      <section class="card">
-        <h2>Rolle wählen</h2>
-        <p><a href="./control.html"><b>Steuerung</b></a> – am Notebook: koppeln, konfigurieren, Messung starten, Ergebnis ansehen.</p>
-        <p><a href="./camera.html"><b>Kamera</b></a> – am iPhone: Kamera und Auswertung, wird von der Steuerung bedient.</p>
-        <p><a href="./dev.html"><b>Entwickler</b></a> – Generator, Testvideos und Videodateien ohne Kopplung.</p>
-        <p class="muted">Beide Geräte brauchen dieselbe Adresse (HTTPS) und dasselbe WLAN. Die Seite sendet nichts an einen Server; das Video bleibt auf dem Handy.</p>
-      </section>
+    <header class="app-header">
+      <a class="brand" href="./"><img src="/favicon.svg" alt="" aria-hidden="true" /><span>RimTrace</span></a>
+      <span class="page-title">Seiten- und Höhenschlag beim Zentrieren</span>
+    </header>
+    <main class="home">
+      <h1>Welches Gerät ist das?</h1>
+      <p class="muted">RimTrace braucht zwei Geräte: das Notebook steuert und zeigt die Maßnahmen, das fest montierte iPhone misst als Kamera.</p>
+      <div class="tiles">
+        <a class="tile" href="./control.html">
+          <span class="icon" aria-hidden="true">💻</span>
+          <h2>Steuerung (Notebook)</h2>
+          <p>Handy koppeln, Laufrad einrichten, Messung starten und die Maßnahmen je Speiche groß ablesen.</p>
+          <span class="go">Steuerung öffnen →</span>
+        </a>
+        <a class="tile" href="./camera.html">
+          <span class="icon" aria-hidden="true">📱</span>
+          <h2>Kamera (iPhone)</h2>
+          <p>Am Handy öffnen, fest montieren und ans Ladegerät hängen. Misst die Felge, bedient wird es vom Notebook.</p>
+          <span class="go">Kamera öffnen →</span>
+        </a>
+      </div>
+      <div class="callout">
+        <p>Beide Geräte brauchen dieselbe Adresse (HTTPS) und dasselbe WLAN. Die Seite sendet nichts an einen Server; das Video bleibt auf dem Handy.</p>
+        <p class="hint">Für Entwicklung und Tests ohne Handy: <a href="./dev.html">Entwicklerseite</a> (Generator, Testvideos, Videodateien).</p>
+      </div>
     </main>
   </body>
 </html>

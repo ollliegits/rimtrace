@@ -3,92 +3,177 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2a7a84" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>RimTrace – Steuerung</title>
   </head>
-  <body>
-    <header>
-      <h1>RimTrace <small>Steuerung (Notebook) · <span id="link">nicht gekoppelt</span></small></h1>
-      <a href="./">Start</a>
+  <body class="control-page">
+    <header class="app-header">
+      <a class="brand" href="./" title="Zur Startseite"><img src="/favicon.svg" alt="" aria-hidden="true" /><span>RimTrace</span></a>
+      <span class="page-title">Steuerung</span>
+      <span class="spacer"></span>
+      <span class="status" id="linkStatus" data-state="idle" role="status"><span class="dot" aria-hidden="true"></span>Handy: <b id="link">nicht gekoppelt</b></span>
+      <span class="status" id="runStatus" data-state="idle" role="status"><span class="dot" aria-hidden="true"></span>Messung: <b id="runState">–</b></span>
+      <button id="openSettings" type="button" aria-haspopup="dialog">⚙ Einstellungen</button>
     </header>
-    <div id="warn" class="warn" hidden></div>
-    <main>
-      <section class="card" id="pairing">
-        <h2>1 · Kopplung</h2>
-        <p class="muted">Das Handy muss im selben WLAN sein. Webcam freigeben, damit der Browser echte Adressen statt anonymisierter Namen verwendet.</p>
-        <p><button id="pair">Kopplung starten</button> <button id="relink" hidden>Neu koppeln</button> <span id="pairMsg" class="muted"></span></p>
-        <div class="grid" id="pairBox" hidden>
-          <div>
-            <p><b>A</b> · Diesen QR am Handy (Seite „Kamera“) scannen:</p>
-            <canvas id="offerQr" style="width: 300px"></canvas>
-            <p id="offerInfo" class="muted"></p>
-            <textarea id="offerOut" rows="3" readonly></textarea>
-          </div>
-          <div>
-            <p><b>B</b> · Antwort-QR des Handys vor die Webcam halten:</p>
-            <video id="cam" playsinline muted style="width: 300px; border-radius: 6px"></video>
-            <textarea id="answerIn" rows="3" spellcheck="false" placeholder="oder Antwort-Code einfügen"></textarea>
-            <p><button id="answerApply">Antwort übernehmen</button></p>
-          </div>
-        </div>
-      </section>
 
-      <section class="card">
-        <h2>2 · Konfiguration</h2>
-        <div class="cols" id="form">
-          <label>Speichenzahl <input id="spokes" type="number" min="2" step="1" /></label>
-          <label>Felgenbreite außen (mm, Pflicht) <input id="rimWidthMm" type="number" min="0" step="0.1" /></label>
-          <label>Nullpunkt
+    <nav class="steps" aria-label="Ablauf">
+      <ol>
+        <li id="step1"><a href="#pairing">Koppeln</a></li>
+        <li id="step2"><a href="#setup">Einrichten</a></li>
+        <li id="step3"><a href="#measure">Messen</a></li>
+        <li id="step4"><a href="#resultCard">Maßnahmen umsetzen</a></li>
+      </ol>
+      <p id="stepHint" class="step-hint" aria-live="polite"></p>
+    </nav>
+
+    <div id="warn" class="alert" role="alert" hidden></div>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <section class="panel" aria-labelledby="statusTitle">
+          <div class="panel-head"><h2 id="statusTitle">Status</h2><span class="spacer"></span><button id="relink" type="button" hidden>Neu koppeln</button></div>
+          <dl class="kv" id="statusList"></dl>
+        </section>
+        <section class="panel" aria-labelledby="cfgTitle">
+          <div class="panel-head"><h2 id="cfgTitle">Laufrad</h2><span class="spacer"></span><button id="editSettings" type="button" aria-haspopup="dialog">Ändern …</button></div>
+          <dl class="kv cfg-dl" id="cfgSummary"></dl>
+          <p id="cfgMsg" class="hint" aria-live="polite"></p>
+        </section>
+      </aside>
+
+      <div class="content">
+        <section class="panel" id="pairing" aria-labelledby="pairTitle">
+          <div class="panel-head"><h2 id="pairTitle"><span class="num">1 ·</span> Handy koppeln</h2></div>
+          <p class="muted">Handy und Notebook müssen im selben WLAN sein. Die Webcam wird freigegeben, damit sie den Antwort-QR des Handys lesen kann (und der Browser echte Adressen verwendet).</p>
+          <div class="row"><button id="pair" class="primary big" type="button">Kopplung starten</button> <span id="pairMsg" class="muted" aria-live="polite"></span></div>
+          <div class="grid" id="pairBox" hidden>
+            <div class="card">
+              <h3>A · Am Handy (Seite „Kamera“) diesen QR-Code scannen</h3>
+              <canvas id="offerQr" class="qr"></canvas>
+              <p id="offerInfo" class="hint"></p>
+              <details class="more"><summary>Code als Text</summary><textarea id="offerOut" rows="3" readonly aria-label="Offer-Code"></textarea></details>
+            </div>
+            <div class="card">
+              <h3>B · Antwort-QR des Handys vor die Webcam halten</h3>
+              <video id="cam" playsinline muted style="width: 300px; max-width: 100%; border-radius: 6px; background: #0d1619"></video>
+              <label class="field">oder Antwort-Code einfügen
+                <textarea id="answerIn" rows="3" spellcheck="false" placeholder="Antwort-Code vom Handy"></textarea>
+              </label>
+              <p><button id="answerApply" type="button">Antwort übernehmen</button></p>
+            </div>
+          </div>
+        </section>
+
+        <details class="panel" id="setup" open>
+          <summary><h2><span class="num">2 ·</span> Einrichten: Standbild und Messbereiche</h2></summary>
+          <div class="row"><button id="snap" type="button">📷 Standbild vom Handy holen</button> <span id="snapMsg" class="muted" aria-live="polite"></span></div>
+          <div id="snapWrap">
+            <div id="snapEmpty" class="empty">Noch kein Standbild. Nach der Kopplung „Standbild vom Handy holen“ wählen.</div>
+            <canvas id="snapView" hidden aria-label="Standbild mit Messbereichen"></canvas>
+            <div class="legend" id="snapLegend" hidden aria-hidden="true">
+              <div><i style="background: #ff4c4c"></i>Ausschnitt</div>
+              <div><i style="background: #ffe066"></i>Felge</div>
+              <div><i style="background: #6fe39a"></i>Referenz</div>
+              <div><i style="background: #4cc2ff"></i>Bettstreifen</div>
+            </div>
+          </div>
+          <p class="hint">Rahmen mit der Maus anpassen: Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn. Änderungen werden sofort übernommen und ans Handy gesendet. Feineinstellung als Zahlen unter ⚙ Einstellungen.</p>
+        </details>
+
+        <section class="panel" id="measure" aria-labelledby="measureTitle">
+          <div class="panel-head"><h2 id="measureTitle"><span class="num">3 ·</span> Messen</h2></div>
+          <div class="row">
+            <button id="start" class="primary big" type="button">▶ Start</button>
+            <button id="stop" class="big" type="button">■ Stopp</button>
+            <span id="runMsg" class="muted" aria-live="polite"></span>
+          </div>
+          <ol class="howto">
+            <li>Rad kurz vor dem Ventilloch ansetzen, Start drücken.</li>
+            <li>Gleichmäßig und nicht zu schnell mindestens <b>2 volle Runden</b> drehen (beide Richtungen erlaubt).</li>
+            <li>Kurz nach dem Ventilloch Stopp drücken.</li>
+          </ol>
+          <div class="live-big" id="liveBig" aria-live="off"></div>
+          <div id="liveWarn" class="callout warn" role="status" hidden></div>
+        </section>
+
+        <section class="panel" id="resultCard" aria-labelledby="resultTitle">
+          <div class="panel-head"><h2 id="resultTitle"><span class="num">4 ·</span> Ergebnis und Maßnahmen</h2><span id="resultAge" class="hint"></span></div>
+          <div id="resultEmpty" class="empty">Noch kein Ergebnis. Nach dem Stopp erscheinen hier die Maßnahmen je Speiche und die Diagramme.</div>
+          <div id="resultBody" hidden>
+            <div id="check" aria-live="polite"></div>
+            <p class="rule" id="countRule">Zählung: <b>Speiche 1</b> ist die erste Speiche nach dem Ventilloch in Fahrtrichtung; durchgehend über beide Seiten. <b>AS</b> = Antriebsseite, <b>BS</b> = Bremsscheibenseite.</p>
+            <ol id="actions" class="actions-list" aria-label="Maßnahmen"></ol>
+            <p id="planInfo" class="hint"></p>
+            <div class="next">
+              <button id="next" class="primary xl" type="button">✓ Alles umgesetzt – nächste Messung</button>
+              <span id="nextMsg" class="muted" aria-live="polite"></span>
+            </div>
+            <div class="grid">
+              <div class="chart"><h3>Seitenschlag (mm) je Speiche</h3><div id="chartLat"></div></div>
+              <div class="chart"><h3>Höhenschlag (mm) je Speiche</h3><div id="chartH"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <details class="panel" id="diag">
+          <summary><h2>Diagnose und Rohdaten</h2></summary>
+          <div class="row"><button id="copyResult" type="button">Ergebnis als Text kopieren</button> <span id="copyMsg" class="muted" aria-live="polite"></span></div>
+          <h3 style="margin-top: 10px">Live</h3>
+          <table><tbody id="live"></tbody></table>
+          <h3 style="margin-top: 10px">Letztes Ergebnis</h3>
+          <div id="debug" class="hint">–</div>
+        </details>
+      </div>
+    </main>
+
+    <dialog id="settings" aria-labelledby="settingsTitle">
+      <form method="dialog" id="settingsForm">
+        <h2 id="settingsTitle">Einstellungen</h2>
+        <fieldset>
+          <legend>Laufrad</legend>
+          <label class="field">Felgenaußenbreite (mm) – Pflicht
+            <input id="rimWidthMm" type="number" min="0" step="0.1" inputmode="decimal" required aria-describedby="rimHint" />
+            <span class="hint" id="rimHint">Mit dem Messschieber messen; bestimmt den Maßstab.</span>
+          </label>
+          <label class="field">Speichenzahl <input id="spokes" type="number" min="2" step="1" inputmode="numeric" /></label>
+          <label class="field">Nullpunkt
             <select id="marker"><option value="ventil">Ventilloch</option><option value="aufkleber">Aufkleber (Testvideos)</option></select>
           </label>
-          <label>Speiche 1 liegt auf
+          <label class="field">Speiche 1 liegt auf der
             <select id="spoke1Side"><option value="antrieb">Antriebsseite</option><option value="bremse">Bremsscheibenseite</option></select>
           </label>
-          <label>Antriebsseite im Bild
+        </fieldset>
+        <fieldset>
+          <legend>Kamerabild</legend>
+          <label class="field">Antriebsseite im Bild
             <select id="driveImageSide"><option value="left">links</option><option value="right">rechts</option></select>
           </label>
-          <label>Felgenbett läuft bei Vorwärtsdrehen
+          <label class="field">Felgenbett läuft bei Vorwärtsdrehen
             <select id="travel"><option value="down">nach unten</option><option value="up">nach oben</option></select>
           </label>
-          <label>Bild drehen (Grad, im Uhrzeigersinn)
+          <label class="field">Bild drehen (Grad, im Uhrzeigersinn)
             <select id="rotate"><option>0</option><option>90</option><option>180</option><option>270</option></select>
           </label>
-          <label>Bild spiegeln <input id="mirror" type="checkbox" /></label>
-          <label>Toleranz Seite (mm) <input id="toleranceLateralMm" type="number" min="0" step="0.05" /></label>
-          <label>Toleranz Höhe (mm) <input id="toleranceHeightMm" type="number" min="0" step="0.05" /></label>
-        </div>
-        <details>
+          <label class="field check"><input id="mirror" type="checkbox" /> Bild spiegeln</label>
+        </fieldset>
+        <fieldset>
+          <legend>Toleranz (Abbruchkriterium)</legend>
+          <label class="field">Seitenschlag ± (mm) <input id="toleranceLateralMm" type="number" min="0" step="0.05" inputmode="decimal" /></label>
+          <label class="field">Höhenschlag ± (mm) <input id="toleranceHeightMm" type="number" min="0" step="0.05" inputmode="decimal" /></label>
+        </fieldset>
+        <details class="more">
           <summary>Messbereiche als Zahlen (JSON, Pixel im gedrehten Bild) – Feineinstellung</summary>
-          <textarea id="areas" rows="16" spellcheck="false"></textarea>
+          <textarea id="areas" rows="14" spellcheck="false" aria-label="Messbereiche als JSON"></textarea>
         </details>
-        <p><button id="apply">Übernehmen und senden</button> <button id="defaults">Standardbereiche</button> <span id="cfgMsg"></span></p>
-      </section>
-
-      <section class="card">
-        <h2>3 · Standbild und Messbereiche</h2>
-        <p><button id="snap">Standbild vom Handy holen</button> <span id="snapMsg" class="muted"></span></p>
-        <canvas id="snapView"></canvas>
-        <p class="muted">Rot: Ausschnitt · Gelb: Felge · Grün: Referenz · Blau: Bettstreifen. Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn. Änderungen werden sofort übernommen und ans Handy gesendet.</p>
-      </section>
-
-      <section class="card">
-        <h2>4 · Messung</h2>
-        <p><button id="start">Start</button> <button id="stop">Stopp</button> <span id="runMsg" class="muted"></span></p>
-        <table><tbody id="live"></tbody></table>
-      </section>
-
-      <section class="card" id="resultCard">
-        <h2>Ergebnis <span id="resultAge" class="muted"></span></h2>
-        <div id="check"></div>
-        <p><button id="copyResult">Ergebnis als Text kopieren</button> <span id="copyMsg" class="muted"></span></p>
-        <div class="grid">
-          <div><h2>Seitenschlag (mm)</h2><div id="chartLat"></div></div>
-          <div><h2>Höhenschlag (mm)</h2><div id="chartH"></div></div>
+        <div class="actions">
+          <span id="cfgDlgMsg" class="msg hint" aria-live="polite"></span>
+          <button id="defaults" type="button">Standardbereiche</button>
+          <button id="cancelSettings" type="button">Abbrechen</button>
+          <button id="apply" class="primary" type="button">Übernehmen und senden</button>
         </div>
-        <h2>Maßnahmen</h2>
-        <p id="planInfo" class="muted"></p>
-        <ol id="actions"></ol>
-      </section>
-    </main>
+      </form>
+    </dialog>
     <script type="module" src="/src/app/control.ts"></script>
   </body>
 </html>

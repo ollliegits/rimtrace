@@ -28,7 +28,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const FPS = 30;
 const STORAGE_KEY = 'rimtrace.setup.v1';
 const REAL_STORAGE_KEY = 'rimtrace.realsetup.v1';
-const REV_COLORS = ['#4cc2ff', '#6fe39a', '#ffd666', '#ff9f43', '#ff5cf0', '#b39ddb'];
+const REV_COLORS = ['#56b4e9', '#e69f00', '#cc79a7', '#7a5195', '#b8a600', '#1e7a46'];
 const WARN_MS = 2500;
 const RECORD_SECONDS = 15;
 
@@ -89,8 +89,8 @@ function storedRealSetup(): RealSetup {
 }
 
 const synSeries: ChartSeries[] = [
-  { label: 'Messwert', stroke: '#4cc2ff' },
-  { label: 'Ground Truth', stroke: '#9aa4b2', dash: [6, 4], points: false },
+  { label: 'Messwert', stroke: '#1f6f7a' },
+  { label: 'Ground Truth', stroke: '#5b6b72', dash: [6, 4], points: false },
 ];
 
 function buildCharts(spokes: number, series: ChartSeries[]): void {
@@ -284,7 +284,7 @@ function showValues({ truth }: Frame, r: FrameResult): void {
 
 function revSeries(revs: number): ChartSeries[] {
   const per = Array.from({ length: revs }, (_, i) => ({ label: `Umdrehung ${i}`, stroke: REV_COLORS[i % REV_COLORS.length] }));
-  return [...per, { label: 'Median alle', stroke: '#ffffff', dash: [6, 4] }];
+  return [...per, { label: 'Median alle', stroke: '#14262d', dash: [6, 4] }];
 }
 
 function showRealProfile(): void {

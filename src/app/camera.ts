@@ -22,6 +22,7 @@ let pair = '';
 let qrInfo = '';
 let wakeLock: WakeLockSentinel | undefined;
 let wakeState = 'nicht angefordert';
+let scanning = false;
 
 const worker = new Worker(new URL('./analysis.worker.ts', import.meta.url), { type: 'module' });
 const toWorker = (m: ToWorker, transfer: Transferable[] = []) => worker.postMessage(m, transfer);
@@ -116,9 +117,12 @@ function onMessage(m: Message): void {
   }
 }
 
+const linkBadge: Record<LinkState, string> = { neu: 'idle', wartet: 'busy', verbindet: 'busy', verbunden: 'ok', getrennt: 'bad', fehler: 'bad' };
+
 function setLinkState(state: LinkState, detail: string): void {
   document.body.classList.toggle('linked', state === 'verbunden');
   $('link').textContent = state === 'getrennt' || state === 'fehler' ? `${state}${detail ? ' – ' + detail : ''}` : state;
+  $('linkStatus').dataset.state = linkBadge[state] ?? 'idle';
   $('relink').hidden = !(state === 'getrennt' || state === 'fehler');
   if (state === 'getrennt' || state === 'fehler') warn(`Verbindung zur Steuerung ${state === 'fehler' ? 'fehlgeschlagen' : 'getrennt'}. ${running ? 'Die Messung läuft weiter; ' : ''}„Neu koppeln“ wählen.`);
   else if (state === 'verbunden') {
@@ -138,6 +142,7 @@ function newLink(): Link {
 }
 
 async function acceptOffer(code: string): Promise<void> {
+  scanning = false;
   try {
     const answer = await newLink().acceptOffer(code.trim());
     $('answerBox').hidden = false;
@@ -146,8 +151,9 @@ async function acceptOffer(code: string): Promise<void> {
     qrInfo = `Antwort-QR: Version ${q.version}, ${q.bytes} Zeichen`;
     $('answerInfo').textContent = qrInfo;
     warn('');
+    $('answerBox').scrollIntoView({ block: 'start' });
   } catch (e) {
-    warn(`Offer-Code ungültig: ${(e as Error).message}`);
+    warn(`Offer-Code ungültig: ${(e as Error).message}. QR-Code erneut scannen oder den Code neu einfügen.`);
   }
 }
 
@@ -170,7 +176,8 @@ $('camStart').onclick = async () => {
     $('preview').replaceChildren(source.video);
     feed();
     if (setup) applyConfig(setup);
-    $('camMsg').textContent = 'läuft';
+    $('camMsg').textContent = 'Kamera läuft.';
+    $('camStart').hidden = true;
     await requestWakeLock();
   } catch (e) {
     $('camMsg').textContent = `Kamera nicht verfügbar: ${(e as Error).message}`;
@@ -178,8 +185,10 @@ $('camStart').onclick = async () => {
 };
 
 $('scan').onclick = () => {
-  if (!source) return warn('Zuerst die Kamera starten.');
+  if (!source) return warn('Zuerst die Kamera starten (Schritt 1).');
   stopScan?.();
+  scanning = true;
+  $('preview').scrollIntoView({ block: 'center' });
   stopScan = scanQr(source.video, (text) => {
     void acceptOffer(text);
     return true;
@@ -190,12 +199,37 @@ $('relink').onclick = () => {
   $('answerBox').hidden = true;
   $('relink').hidden = true;
   $('link').textContent = 'nicht gekoppelt';
+  $('linkStatus').dataset.state = 'idle';
+  document.body.classList.remove('linked');
   warn('');
   link?.close();
   link = undefined;
 };
 
+// Großer Status oben: was gerade los ist und was als Nächstes zu tun ist.
+function renderHero(): void {
+  const ls = link?.state;
+  const [state, title, hint] = running
+    ? ['busy', 'Messung läuft', 'Handy nicht bewegen. Gesteuert wird am Notebook.']
+    : ls === 'verbunden'
+      ? ['ok', 'Verbunden – bereit', 'Handy am Ladegerät lassen. Messbereiche einstellen und Start am Notebook.']
+      : ls === 'getrennt' || ls === 'fehler'
+        ? ['bad', 'Verbindung getrennt', '„Neu koppeln“ wählen und den QR-Code der Steuerung erneut scannen.']
+        : !source
+          ? ['idle', 'Kamera aus', '„Kamera starten“ wählen und den Kamerazugriff erlauben.']
+          : !$('answerBox').hidden
+            ? ['busy', 'Antwort-QR zeigen', 'Den Antwort-QR unten vor die Webcam des Notebooks halten.']
+            : scanning
+              ? ['busy', 'Suche QR-Code …', 'Kamera auf den QR-Code am Notebook-Bildschirm richten.']
+              : ['idle', 'Nicht gekoppelt', '„QR-Code scannen“ wählen und den Code der Steuerung erfassen.'];
+  const hero = $('hero');
+  if (hero.dataset.state !== state) hero.dataset.state = state;
+  if ($('heroState').textContent !== title) $('heroState').textContent = title;
+  if ($('heroHint').textContent !== hint) $('heroHint').textContent = hint;
+}
+
 function renderDiag(): void {
+  renderHero();
   const s = source?.settings;
   const row = (k: string, v: string) => `<tr><td>${k}</td><td>${v}</td></tr>`;
   const t = session;

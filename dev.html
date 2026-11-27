@@ -3,11 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2a7a84" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>RimTrace – Entwicklerseite</title>
   </head>
-  <body>
-    <header>
-      <h1>RimTrace <small>Entwickler · <span id="status"></span></small></h1>
+  <body class="dev-page">
+    <header class="app-header">
+      <a class="brand" href="./" title="Zur Startseite"><img src="/favicon.svg" alt="" aria-hidden="true" /><span>RimTrace</span></a>
+      <span class="page-title">Entwickler · <span id="status" aria-live="polite"></span></span>
+      <span class="spacer"></span>
       <div class="controls">
         <label>Testfall <select id="scenario"></select></label>
         <label>Auswertung
@@ -32,20 +36,20 @@
       </div>
     </header>
 
-    <div id="warn" class="warn" hidden>Rad dreht zu schnell (mehr als ½ Speiche pro Bild): Bilder verworfen, Position verloren. Langsamer drehen.</div>
+    <div id="warn" class="warn" role="alert" hidden>Rad dreht zu schnell (mehr als ½ Speiche pro Bild): Bilder verworfen, Position verloren. Langsamer drehen.</div>
 
     <main>
       <canvas id="view"></canvas>
 
       <section class="grid">
-        <div id="values" class="card"></div>
-        <div class="card">
+        <div id="values" class="panel"></div>
+        <div class="panel">
           <h2>Top-3-Maßnahmen</h2>
           <ol id="actions"></ol>
         </div>
       </section>
 
-      <section class="card">
+      <section class="panel">
         <h2>Messbereiche (Setup, JSON)</h2>
         <p id="setupInfo" class="muted"></p>
         <textarea id="setupText" spellcheck="false" rows="14"></textarea>
@@ -53,8 +57,8 @@
       </section>
 
       <section class="grid">
-        <div class="card"><h2>Seitenschlag (mm)</h2><div id="chartLat"></div></div>
-        <div class="card"><h2>Höhenschlag (mm)</h2><div id="chartH"></div></div>
+        <div class="panel"><h2>Seitenschlag (mm)</h2><div id="chartLat"></div></div>
+        <div class="panel"><h2>Höhenschlag (mm)</h2><div id="chartH"></div></div>
       </section>
     </main>
     <script type="module" src="/src/app/main.ts"></script>

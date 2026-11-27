@@ -1,7 +1,15 @@
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 
-const axisStyle = { stroke: '#9aa4b2', grid: { stroke: '#2a3340', width: 1 }, ticks: { stroke: '#2a3340' } };
+// Farben wie style.css (--muted, --border), Schrift system-ui
+const axisStyle = {
+  stroke: '#5b6b72',
+  font: '12px system-ui, -apple-system, sans-serif',
+  labelFont: '600 12px system-ui, -apple-system, sans-serif',
+  grid: { stroke: '#e3eaec', width: 1 },
+  ticks: { stroke: '#d9e2e4' },
+};
+const height = 240;
 const nullable = (a: number[]) => a.map((v) => (Number.isFinite(v) ? v : null));
 
 export interface ChartSeries {
@@ -17,7 +25,7 @@ export function createRunoutChart(el: HTMLElement, spokes: number, unit: string,
   const plot = new uPlot(
     {
       width: el.clientWidth || 600,
-      height: 220,
+      height,
       legend: { show: true },
       scales: { x: { time: false } },
       axes: [
@@ -45,7 +53,7 @@ export function createRunoutChart(el: HTMLElement, spokes: number, unit: string,
       plot.setData([x, ...data.map(nullable)] as uPlot.AlignedData);
     },
     resize() {
-      plot.setSize({ width: el.clientWidth || 600, height: 220 });
+      plot.setSize({ width: el.clientWidth || 600, height });
     },
   };
 }

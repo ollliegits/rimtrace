@@ -2,6 +2,7 @@ import './style.css';
 import {
   defaultRealSetup,
   describeTruing,
+  formatTurns,
   parseSetup,
   realSetupError,
   reviveNaN,
@@ -22,7 +23,8 @@ import { drawQr, scanQr } from './rtc/qr';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const CONFIG_KEY = 'rimtrace.control.v1';
 const RESULT_KEY = 'rimtrace.result.v1';
-const COLORS = ['#4cc2ff', '#ff9f4c', '#6fe39a', '#d58cff', '#ffe066'];
+const COLORS = ['#56b4e9', '#e69f00', '#cc79a7', '#7a5195', '#b8a600'];
+const MEDIAN_COLOR = '#14262d';
 const statusTimeoutMs = 4000;
 
 const formKeys = ['spokes', 'rimWidthMm', 'marker', 'spoke1Side', 'driveImageSide', 'travel', 'rotate', 'mirror', 'toleranceLateralMm', 'toleranceHeightMm'] as const;
@@ -44,10 +46,47 @@ let snapshotScale = 1;
 let viewK = 1; // Videopixel → Canvaspixel
 let snapshotBlobUrl = '';
 const assembler = new SnapshotAssembler();
+// Fortschritt im Ablauf (Schrittleiste)
+let configOk = false;
+let snapshotSeen = false;
+let currentStep = 0;
 
 function warn(text: string): void {
   $('warn').textContent = text;
   $('warn').hidden = !text;
+}
+
+const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+function setText(id: string, text: string, cls = ''): void {
+  const el = $(id);
+  if (el.textContent !== text) el.textContent = text;
+  el.className = cls;
+}
+
+// Meldungen der Auswertung mit einem Hinweis, was zu tun ist.
+const hints: [RegExp, string][] = [
+  [/Felge nicht erkannt/, 'Felgenrahmen (gelb) am Standbild prüfen: beidseitig heller Rand, darunter nichts Dunkles.'],
+  [/kein Nullpunkt/, 'Der blaue Bettstreifen muss das Ventilloch erfassen; Nullpunkt in den Einstellungen prüfen.'],
+  [/volle Umdrehung/, 'Mindestens 2 volle Runden drehen, erst danach Stopp.'],
+  [/statt \d+ Löcher/, 'Speichenzahl prüfen; gleichmäßig drehen; Bettstreifen (blau) nur über das Felgenbett legen.'],
+  [/weichen voneinander ab/, 'Rad ruhig und gleichmäßig drehen; Halterung von Handy und Referenz auf Wackeln prüfen.'],
+  [/zu schnell/i, 'Langsamer und gleichmäßig drehen (unter etwa 0,4 Speichen pro Bild).'],
+  [/nicht auswertbar/, 'Messbereiche Felge (gelb) und Referenz (grün) am Standbild prüfen.'],
+  [/ohne Durchgang/, 'Im Bereich der Löcher nicht hin- und herdrehen.'],
+];
+const hintFor = (msg: string) => hints.find(([re]) => re.test(msg))?.[1];
+
+function friendlySetupError(msg: string): string {
+  if (msg.startsWith('rimWidthMm')) return 'Felgenbreite fehlt: Außenbreite der Felge mit dem Messschieber messen und unter ⚙ Einstellungen eintragen. Ohne sie startet keine Messung.';
+  if (msg.startsWith('spokes')) return 'Speichenzahl muss eine ganze Zahl ab 2 sein.';
+  if (msg.includes('liegt nicht im Ausschnitt')) return `Ein Messbereich liegt außerhalb des Ausschnitts (rot): Rahmen am Standbild anpassen. (${msg})`;
+  return msg;
+}
+
+function setCfgMsg(cls: string, text: string): void {
+  setText('cfgMsg', text, `hint ${cls}`);
+  setText('cfgDlgMsg', text, `msg hint ${cls}`);
 }
 
 // Konfiguration: Formular (häufige Felder) und JSON (alle übrigen Bereiche).
@@ -74,7 +113,31 @@ function writeForm(s: RealSetup): void {
 }
 
 function markRequired(): void {
-  $('rimWidthMm').classList.toggle('req', !(Number($<HTMLInputElement>('rimWidthMm').value) > 0));
+  const missing = !(Number($<HTMLInputElement>('rimWidthMm').value) > 0);
+  $('rimWidthMm').classList.toggle('req', missing);
+  $('rimWidthMm').setAttribute('aria-invalid', String(missing));
+}
+
+const rimOk = () => Boolean(setup && setup.rimWidthMm > 0);
+
+function renderConfigSummary(): void {
+  const f = readForm();
+  const row = (k: string, v: string, cls = '') => `<dt>${k}</dt><dd${cls ? ` class="${cls}"` : ''}>${v}</dd>`;
+  const rim = Number(f.rimWidthMm) > 0 ? `${String(f.rimWidthMm).replace('.', ',')} mm` : 'fehlt – bitte eintragen';
+  const html = [
+    row('Felgenbreite', rim, Number(f.rimWidthMm) > 0 ? '' : 'bad'),
+    row('Speichen', String(f.spokes ?? '–')),
+    row('Nullpunkt', f.marker === 'aufkleber' ? 'Aufkleber' : 'Ventilloch'),
+    row('Speiche 1', f.spoke1Side === 'bremse' ? 'Bremsscheibenseite' : 'Antriebsseite'),
+    row('Toleranz', `Seite ±${String(f.toleranceLateralMm).replace('.', ',')} · Höhe ±${String(f.toleranceHeightMm).replace('.', ',')} mm`),
+  ].join('');
+  if ($('cfgSummary').innerHTML !== html) $('cfgSummary').innerHTML = html;
+}
+
+function openSettings(focusId?: string): void {
+  const d = $<HTMLDialogElement>('settings');
+  if (!d.open) d.showModal();
+  if (focusId) $(focusId).focus();
 }
 
 function loadConfig(): void {
@@ -99,32 +162,35 @@ function currentSetup(): RealSetup | string {
 
 function applyConfig(): boolean {
   const s = currentSetup();
-  const msg = $('cfgMsg');
   if (typeof s === 'string') {
-    msg.className = 'error';
-    msg.textContent = s;
+    setCfgMsg('error', friendlySetupError(s));
     return false;
   }
   setup = s;
   localStorage.setItem(CONFIG_KEY, JSON.stringify(s));
-  msg.className = 'muted';
   clearTimeout(ackTimer);
+  configOk = false;
   if (link?.state === 'verbunden') {
-    msg.textContent = 'gesendet, warte auf Bestätigung des Handys …';
+    setCfgMsg('', 'gesendet, warte auf Bestätigung des Handys …');
     ackTimer = setTimeout(() => {
-      msg.className = 'error';
-      msg.textContent = 'keine Bestätigung vom Handy (Verbindung prüfen, Seite am Handy neu laden)';
+      setCfgMsg('error', 'Keine Bestätigung vom Handy: Verbindung prüfen oder die Seite am Handy neu laden.');
     }, 3000);
-  } else msg.textContent = 'gespeichert (wird nach der Kopplung gesendet)';
+  } else setCfgMsg('', 'gespeichert (wird nach der Kopplung ans Handy gesendet)');
   link?.send({ t: 'config', setup: s });
+  renderConfigSummary();
   drawSnapshot();
   return true;
 }
 
 // Kopplung
+const linkBadge: Record<LinkState, string> = { neu: 'idle', wartet: 'busy', verbindet: 'busy', verbunden: 'ok', getrennt: 'bad', fehler: 'bad' };
+
 function setLinkState(state: LinkState, detail: string): void {
   $('link').textContent = state === 'getrennt' || state === 'fehler' ? `${state}${detail ? ' – ' + detail : ''}` : state;
+  $('linkStatus').dataset.state = linkBadge[state] ?? 'idle';
   $('relink').hidden = !(state === 'getrennt' || state === 'fehler' || state === 'verbunden');
+  $('pairing').hidden = state === 'verbunden';
+  if (state !== 'verbunden') configOk = false;
   if (state === 'verbunden') {
     stopScan?.();
     stopWebcam();
@@ -136,7 +202,7 @@ function setLinkState(state: LinkState, detail: string): void {
     if (setup ?? applyConfigSilently()) link?.send({ t: 'config', setup: setup! });
     void link?.candidatePair().then((p) => (pair = p));
   } else if (state === 'getrennt' || state === 'fehler') {
-    warn(`Verbindung zum Handy ${state === 'fehler' ? 'fehlgeschlagen' : 'getrennt'}${detail ? ': ' + detail : ''}. Konfiguration und Ergebnis bleiben erhalten; „Neu koppeln“ wählen.`);
+    warn(`Verbindung zum Handy ${state === 'fehler' ? 'fehlgeschlagen' : 'getrennt'}${detail ? ': ' + detail : ''}. Konfiguration und Ergebnis bleiben erhalten – „Neu koppeln“ wählen und den QR-Code erneut mit dem Handy scannen.`);
   }
 }
 
@@ -179,6 +245,8 @@ function newLink(): Link {
 }
 
 async function startPairing(): Promise<void> {
+  $('pairing').hidden = false;
+  $('pairing').scrollIntoView({ block: 'start' });
   $('pairMsg').textContent = 'Webcam wird geöffnet …';
   await openWebcam();
   $('pairMsg').textContent = 'Offer wird erzeugt …';
@@ -228,8 +296,8 @@ function onMessage(m: Message): void {
       break;
     case 'config-ok':
       clearTimeout(ackTimer);
-      $('cfgMsg').className = 'ok';
-      $('cfgMsg').textContent = `vom Handy bestätigt (${new Date().toLocaleTimeString()})`;
+      configOk = true;
+      setCfgMsg('ok', `✓ vom Handy bestätigt (${new Date().toLocaleTimeString()})`);
       break;
     case 'status':
       camera = m.camera;
@@ -239,6 +307,8 @@ function onMessage(m: Message): void {
     case 'result':
       localStorage.setItem(RESULT_KEY, JSON.stringify({ at: Date.now(), result: m.result, setup }));
       showResult(m.result, setup, Date.now());
+      ($('setup') as HTMLDetailsElement).open = false;
+      $('resultCard').scrollIntoView({ block: 'start' });
       break;
     case 'snapshot': {
       const bytes = assembler.add(m);
@@ -260,6 +330,10 @@ function showSnapshot(bytes: Uint8Array, width: number, fullWidth: number): void
   const img = new Image();
   img.onload = () => {
     snapshotImage = img;
+    snapshotSeen = true;
+    $('snapEmpty').hidden = true;
+    $('snapView').hidden = false;
+    $('snapLegend').hidden = false;
     drawSnapshot();
     $('snapMsg').textContent = `${img.width}×${img.height} (Maßstab ${snapshotScale.toFixed(3)} zum Vollbild)`;
   };
@@ -425,7 +499,7 @@ function buildCharts(spokes: number, revs: number): void {
   $('chartH').replaceChildren();
   const series: ChartSeries[] = [
     ...Array.from({ length: revs }, (_, i) => ({ label: `Umdrehung ${i + 1}`, stroke: COLORS[i % COLORS.length] })),
-    { label: 'Median alle', stroke: '#ffffff', dash: [6, 4] },
+    { label: 'Median alle', stroke: MEDIAN_COLOR, dash: [6, 4] },
   ];
   charts = {
     lat: createRunoutChart($('chartLat'), spokes, 'mm', series, 1),
@@ -435,28 +509,81 @@ function buildCharts(spokes: number, revs: number): void {
 
 let shownResult: { result: RealResult; setup?: RealSetup } | undefined;
 
+const mm = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d).replace('.', ',') : '–');
+
+function renderActions(r: RealResult, s: RealSetup | undefined): { count: number; done: boolean } {
+  const p = r.profile;
+  if (!s) {
+    $('actions').innerHTML = '';
+    $('planInfo').textContent = 'Ohne gespeicherte Konfiguration keine Maßnahmen: Messung wiederholen.';
+    return { count: 0, done: false };
+  }
+  const plan = truingPlan(p.all, spokeSides(s), { toleranceLateralMm: s.toleranceLateralMm, toleranceHeightMm: s.toleranceHeightMm });
+  const w = plan.widthSpokes;
+  $('actions').innerHTML = plan.actions
+    .map((a) => {
+      const name = sideName(s, a.side);
+      const drive = name === 'Antriebsseite';
+      const verb = a.verb === 'tighten' ? 'anziehen' : 'lösen';
+      const text = describeTruing(a, { firstSpoke: 1, sideName: (x) => sideName(s, x) });
+      return (
+        `<li class="action ${drive ? 'drive' : 'brake'}" aria-label="${esc(text)}">` +
+        `<span class="no"><small>Speiche</small>${a.spoke + 1}</span>` +
+        `<span class="side"><abbr title="${name}">${drive ? 'AS' : 'BS'}</abbr>${name}</span>` +
+        `<span class="turns">${formatTurns(a.turns)} <small>Umdr.</small></span>` +
+        `<span class="verb ${a.verb}">${verb}</span></li>`
+      );
+    })
+    .join('');
+  $('planInfo').textContent = plan.actions.length
+    ? `Größte Drehung zuerst. Auslenkung etwa ${w.lateral} Speichen breit (Seite), ${w.height} (Höhe). Erwartet danach: Seite ±${mm(plan.residual.lateralMm, 1)} mm, Höhe ±${mm(plan.residual.heightMm, 1)} mm. Startwerte des Modells – danach neu messen.`
+    : '';
+  return { count: plan.actions.length, done: plan.actions.length === 0 };
+}
+
 function showResult(r: RealResult, s: RealSetup | undefined, at: number): void {
   shownResult = { result: r, setup: s };
+  $('resultEmpty').hidden = true;
+  $('resultBody').hidden = false;
   const p = r.profile;
   buildCharts(p.all.lateral.length, p.revolutions.length);
   charts!.lat.update([...p.revolutions.map((v) => v.lateral), p.all.lateral]);
   charts!.h.update([...p.revolutions.map((v) => v.height), p.all.height]);
-  $('resultAge').textContent = `(${new Date(at).toLocaleTimeString()}, ${r.frames} Bilder, ${Number.isFinite(p.scale) ? p.scale.toFixed(4) : '–'} mm/px)`;
+  $('resultAge').textContent = `Messung von ${new Date(at).toLocaleTimeString()} · ${r.frames} Bilder · ${Number.isFinite(p.scale) ? p.scale.toFixed(4) : '–'} mm/px`;
   const c = r.check;
-  $('check').innerHTML =
-    `<p><span class="pill ${c.ok ? 'ok' : 'bad'}">${c.ok ? 'Messung plausibel' : 'Messung unsicher'}</span> ` +
-    `<span class="muted">volle Umdrehungen ${c.fullRevolutions} · Übereinstimmung Ø ${c.agreeMeanMm.toFixed(2)} / max ${c.agreeMaxMm.toFixed(2)} mm · Löcher je Umdrehung ${p.holesPerRev.join(', ') || '–'} · Nullpunkte ${p.markers.length}</span></p>` +
-    (c.messages.length ? `<ul>${c.messages.map((m) => `<li class="error">${m}</li>`).join('')}</ul>` : '');
-  if (s) {
-    const plan = truingPlan(p.all, spokeSides(s), { toleranceLateralMm: s.toleranceLateralMm, toleranceHeightMm: s.toleranceHeightMm });
-    const w = plan.widthSpokes;
-    $('actions').innerHTML = plan.actions.length
-      ? plan.actions.map((a) => `<li class="${a.verb}"><span class="side">${a.side === 'left' ? '◀' : '▶'}</span> <b>${describeTruing(a, { firstSpoke: 1, sideName: (x) => sideName(s, x) })}</b></li>`).join('')
-      : '<li class="muted">alles innerhalb der Toleranz</li>';
-    $('planInfo').textContent = plan.actions.length
-      ? `Auslenkung etwa ${w.lateral} Speichen breit (Seite), ${w.height} (Höhe). Erwartet danach: Seite ±${plan.residual.lateralMm.toFixed(1)} mm, Höhe ±${plan.residual.heightMm.toFixed(1)} mm. Nur Startwerte des Modells: danach neu messen.`
-      : '';
-  }
+  const { count, done } = renderActions(r, s);
+  const tol = s ? ` (Seite ±${mm(s.toleranceLateralMm)} mm, Höhe ±${mm(s.toleranceHeightMm)} mm)` : '';
+  const stats =
+    `<p class="stats">Volle Umdrehungen ${c.fullRevolutions} · Übereinstimmung Ø ${mm(c.agreeMeanMm)} / max ${mm(c.agreeMaxMm)} mm · ` +
+    `Löcher je Umdrehung ${p.holesPerRev.join(', ') || '–'} · Nullpunkte ${p.markers.length}</p>`;
+  let verdict: string;
+  if (!c.ok) {
+    const items = c.messages.map((m) => `<li>${esc(m)}${hintFor(m) ? `<span class="todo">→ ${esc(hintFor(m)!)}</span>` : ''}</li>`).join('');
+    verdict = `<div class="callout bad verdict"><h3>Messung unsicher – bitte wiederholen</h3><ul>${items}</ul>${stats}</div>`;
+  } else if (done && s) verdict = `<div class="callout ok verdict"><h3>✓ Fertig – alle Speichen innerhalb der Toleranz</h3><p>Seiten- und Höhenschlag liegen innerhalb der eingestellten Toleranz${tol}.</p>${stats}</div>`;
+  else verdict = `<div class="callout ok verdict"><h3>✓ Messung plausibel – ${count} ${count === 1 ? 'Speiche' : 'Speichen'} nachstellen</h3>${stats}</div>`;
+  $('check').innerHTML = verdict;
+  $('actions').classList.toggle('uncertain', !c.ok);
+  if (!c.ok && count) $('planInfo').textContent = `Nur unter Vorbehalt (Messung unsicher). ${$('planInfo').textContent}`;
+  $('next').textContent = !c.ok ? '↻ Messung wiederholen' : done ? '↻ Kontrollmessung' : '✓ Alles umgesetzt – nächste Messung';
+  const marker = s?.marker === 'aufkleber' ? 'dem Aufkleber' : 'dem Ventilloch';
+  $('countRule').innerHTML = `Zählung: <b>Speiche 1</b> ist die erste Speiche nach ${marker} in Fahrtrichtung, durchgehend über beide Seiten. <b>AS</b> = Antriebsseite, <b>BS</b> = Bremsscheibenseite.`;
+  renderDebug(r);
+}
+
+function renderDebug(r: RealResult): void {
+  const p = r.profile;
+  const holes = p.holes ?? [];
+  const events = p.events ?? [];
+  const row = (k: string, v: string) => `<dt>${k}</dt><dd>${esc(v)}</dd>`;
+  $('debug').innerHTML =
+    `<dl class="kv">${row('Bilder', String(r.frames))}${row('Maßstab', `${Number.isFinite(p.scale) ? p.scale.toFixed(4) : '–'} mm/px`)}` +
+    `${row('Löcher je Umdrehung', p.holesPerRev.join(', ') || '–')}${row('Nullpunkte (Bild)', p.markers.join(', ') || '–')}` +
+    `${row('Ventilloch-Verhältnis', r.valveRatios?.map((v) => v.toFixed(2)).join(', ') || '–')}` +
+    `${row('Verworfene Bilder', String(r.check.discardedFrames ?? '–'))}${row('Kleinster Lochabstand', `${Number.isFinite(r.check.minHoleGap) ? r.check.minHoleGap.toFixed(1) : '–'} Bilder`)}</dl>` +
+    `<details class="more"><summary>Erkannte Löcher (${holes.length})</summary><pre class="mono">${holes.map((h) => `Bild ${h.frame} · Umdr. ${h.rev} · Speiche ${h.k + 1}`).join('\n') || '–'}</pre></details>` +
+    `<details class="more"><summary>Rohereignisse Lochfenster (${events.length})</summary><pre class="mono">${events.map((e) => `Bild ${e.frame} · ${esc(e.kind)} · Richtung ${e.dir} · Größe ${e.size}`).join('\n') || '–'}</pre></details>` +
+    `<details class="more"><summary>Bettweg je Bild (px)</summary><pre class="mono">${esc(p.shifts ?? '–')}</pre></details>`;
 }
 
 function loadResult(): void {
@@ -471,42 +598,152 @@ function loadResult(): void {
   }
 }
 
+const dirText = (s?: SessionStatus) => (s ? (s.dir > 0 ? '▶ vorwärts' : s.dir < 0 ? '◀ rückwärts' : '–') : '–');
+
 function renderLive(): void {
-  const row = (k: string, v: string) => `<tr><td>${k}</td><td>${v}</td></tr>`;
-  const dir = session ? (session.dir > 0 ? '▶ vorwärts' : session.dir < 0 ? '◀ rückwärts' : '–') : '–';
+  const linked = link?.state === 'verbunden';
+  const running = Boolean(linked && camera?.running);
+  const runText = !linked || !camera ? 'kein Handy' : running ? 'läuft' : 'bereit';
+  setText('runState', runText);
+  $('runStatus').dataset.state = running ? 'busy' : linked && camera ? 'ok' : 'idle';
+  $('start').toggleAttribute('disabled', running);
+  $('stop').toggleAttribute('disabled', !running);
+  $('next').toggleAttribute('disabled', running);
+
+  const warnings = session?.warnings ?? [];
+  const dd = (k: string, v: string, cls = '') => `<dt>${k}</dt><dd${cls ? ` class="${cls}"` : ''}>${esc(v)}</dd>`;
+  const status = [
+    dd('Handy', linked ? 'verbunden' : link?.state ?? 'nicht gekoppelt', linked ? '' : link?.state === 'getrennt' || link?.state === 'fehler' ? 'bad' : ''),
+    dd('Messung', runText),
+    dd('Kamera', camera ? `${camera.fps.toFixed(0)} Bilder/s` : '–'),
+    dd('Warnungen', warnings.length ? warnings.join(', ') : 'keine', warnings.length ? 'warn' : ''),
+  ].join('');
+  if ($('statusList').innerHTML !== status) $('statusList').innerHTML = status;
+
+  const big = (k: string, v: string) => `<div><span>${k}</span><b>${v}</b></div>`;
+  $('liveBig').innerHTML = [
+    big('Löcher (netto)', session ? String(session.holes) : '–'),
+    big('Nullpunkte', session ? String(session.markers) : '–'),
+    big('Richtung', dirText(session)),
+    big('Bilder', session ? String(session.frames) : '–'),
+  ].join('');
+  const liveWarn = warnings.map((w) => `<b>${esc(w)}</b>${hintFor(w) ? ` – ${esc(hintFor(w)!)}` : ''}`).join('<br>');
+  $('liveWarn').hidden = !liveWarn;
+  if ($('liveWarn').innerHTML !== liveWarn) $('liveWarn').innerHTML = liveWarn;
+
+  const row = (k: string, v: string) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`;
   $('live').innerHTML = [
     row('Messung', camera ? (camera.running ? 'läuft' : 'gestoppt') : 'kein Handy'),
     row('Kamera', camera ? `${camera.width}×${camera.height} · ${camera.fps.toFixed(1)} fps · verworfen ${camera.dropped}` : '–'),
     row('Auswertung', session ? `${session.frames} Bilder · Ø ${session.avgMs.toFixed(2)} ms · p95 ${session.p95Ms.toFixed(2)} ms` : '–'),
-    row('Löcher', session ? `Nullpunkte ${session.markers} · netto ${session.holes} · ${dir}` : '–'),
-    row('Warnungen', session?.warnings.length ? session.warnings.join(', ') : 'keine'),
+    row('Löcher', session ? `Nullpunkte ${session.markers} · netto ${session.holes} · ${dirText(session)}` : '–'),
+    row('Warnungen', warnings.length ? warnings.join(', ') : 'keine'),
     row('Verbindung', `${link?.state ?? 'nicht gekoppelt'}${pair ? ' · ' + pair : ''}`),
     row('ICE', link?.diag() ?? '–'),
   ].join('');
+  renderSteps(linked, running);
+}
+
+// Schrittleiste: Koppeln → Einrichten → Messen → Maßnahmen umsetzen
+function renderSteps(linked: boolean, running: boolean): void {
+  const check = shownResult?.result.check;
+  const step = !linked ? 1 : !rimOk() || !configOk || !(snapshotSeen || shownResult) ? 2 : running || !shownResult ? 3 : 4;
+  for (let i = 1; i <= 4; i++) {
+    const li = $(`step${i}`);
+    li.classList.toggle('done', i < step || (i === 1 && linked));
+    li.classList.toggle('current', i === step);
+    const a = li.querySelector('a')!;
+    if (i === step) a.setAttribute('aria-current', 'step');
+    else a.removeAttribute('aria-current');
+  }
+  const hint =
+    step === 1
+      ? 'Kopplung starten und den QR-Code mit dem Handy (Seite „Kamera“) scannen.'
+      : step === 2
+        ? !rimOk()
+          ? 'Felgenbreite fehlt: unter ⚙ Einstellungen eintragen (mit dem Messschieber messen).'
+          : !configOk
+            ? 'Konfiguration wird ans Handy gesendet …'
+            : 'Standbild holen und die Messbereiche prüfen, dann messen.'
+        : step === 3
+          ? running
+            ? 'Messung läuft: gleichmäßig mindestens 2 volle Runden drehen, dann Stopp.'
+            : 'Bereit: Start drücken und das Rad gleichmäßig drehen.'
+          : check && !check.ok
+            ? 'Messung unsicher: Hinweise beachten und die Messung wiederholen.'
+            : 'Maßnahmen am Rad umsetzen, dann „Alles umgesetzt – nächste Messung“.';
+  setText('stepHint', hint, 'step-hint');
+  if (step !== currentStep) {
+    if (step === 2) ($('setup') as HTMLDetailsElement).open = true;
+    currentStep = step;
+  }
 }
 
 setInterval(() => {
   renderLive();
-  if (link?.state === 'verbunden' && Date.now() - lastStatusAt > statusTimeoutMs) warn('Seit über 4 s kein Status vom Handy (Display aus, App im Hintergrund oder WLAN-Problem?).');
+  if (link?.state === 'verbunden' && Date.now() - lastStatusAt > statusTimeoutMs) warn('Seit über 4 s kein Status vom Handy: Display aus, Seite im Hintergrund oder WLAN-Problem? Handy prüfen, ggf. „Neu koppeln“.');
   else if (link?.state === 'verbunden' && $('warn').textContent?.startsWith('Seit über')) warn('');
 }, 500);
+
+function startMeasurement(): void {
+  const msg = $('runMsg');
+  if (!applyConfig()) {
+    msg.className = 'error';
+    msg.textContent = $('cfgMsg').textContent ?? '';
+    if (!(Number($<HTMLInputElement>('rimWidthMm').value) > 0)) openSettings('rimWidthMm');
+    return;
+  }
+  if (!link?.send({ t: 'start' })) {
+    msg.className = 'error';
+    msg.textContent = 'Nicht verbunden – zuerst das Handy koppeln.';
+    return;
+  }
+  msg.className = 'muted';
+  msg.textContent = `Start gesendet (${new Date().toLocaleTimeString()})`;
+  ($('setup') as HTMLDetailsElement).open = false;
+}
 
 $('pair').onclick = () => void startPairing();
 $('relink').onclick = () => void startPairing();
 $<HTMLTextAreaElement>('areas').oninput = drawSnapshot;
-window.onresize = drawSnapshot;
+window.onresize = () => {
+  drawSnapshot();
+  charts?.lat.resize();
+  charts?.h.resize();
+};
+$('setup').addEventListener('toggle', drawSnapshot);
 $('answerApply').onclick = () => void applyAnswer($<HTMLTextAreaElement>('answerIn').value);
-$('apply').onclick = () => void applyConfig();
+$('openSettings').onclick = () => openSettings();
+$('editSettings').onclick = () => openSettings();
+$('apply').onclick = () => {
+  if (applyConfig()) $<HTMLDialogElement>('settings').close();
+};
+$('settingsForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  $('apply').click();
+});
+// Abbrechen verwirft ungesendete Änderungen im Formular.
+const revertSettings = () => {
+  if (setup) writeForm(setup);
+  renderConfigSummary();
+};
+$('cancelSettings').onclick = () => {
+  revertSettings();
+  $<HTMLDialogElement>('settings').close();
+};
+$('settings').addEventListener('cancel', revertSettings);
 $('defaults').onclick = () => writeForm({ ...defaultRealSetup, ...(readForm() as RealSetup) });
 $('rimWidthMm').oninput = markRequired;
 $('snap').onclick = () => {
-  if (!link?.send({ t: 'snapshot-request', maxSize: 960 })) return void ($('snapMsg').textContent = 'Nicht verbunden.');
+  if (!link?.send({ t: 'snapshot-request', maxSize: 960 })) return void ($('snapMsg').textContent = 'Nicht verbunden – zuerst das Handy koppeln.');
   $('snapMsg').textContent = 'angefordert …';
 };
-$('start').onclick = () => {
-  if (!applyConfig()) return;
-  link?.send({ t: 'start' });
+$('start').onclick = startMeasurement;
+$('next').onclick = () => {
+  startMeasurement();
+  $('measure').scrollIntoView({ block: 'start' });
 };
+$('start').addEventListener('click', () => $('measure').scrollIntoView({ block: 'start' }));
 $('copyResult').onclick = async () => {
   const text = JSON.stringify({ ...shownResult, camera, session }, (_k, v) => (typeof v === 'number' && !Number.isFinite(v) ? null : v), 1);
   try {
@@ -520,5 +757,6 @@ $('stop').onclick = () => link?.send({ t: 'stop' });
 
 loadConfig();
 applyConfigSilently();
+renderConfigSummary();
 loadResult();
 renderLive();
