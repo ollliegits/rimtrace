@@ -338,7 +338,10 @@ export class RealAnalyzer {
 
     const discarded = this.measures.filter((m) => !m.ok).length;
     if (discarded > 0.05 * this.measures.length) messages.push(`${discarded} von ${this.measures.length} Bildern nicht auswertbar`);
-    if (numbering.ignored) messages.push(`${numbering.ignored} Ereignis(se) ohne Durchgang (Umkehr im Lochfenster)`);
+    // Nur zwischen erstem und letztem Nullpunkt: davor und danach liegen die nicht ausgewerteten Umdrehungen.
+    const [first, last] = [numbering.markers[0], numbering.markers[numbering.markers.length - 1]];
+    const ignored = this.numEvents.filter((e) => e.dir === 0 && e.frame > first && e.frame < last).length;
+    if (ignored) messages.push(`${ignored} Ereignis(se) ohne Durchgang (Umkehr im Lochfenster)`);
     return {
       profile,
       check: { ok: !messages.length, messages, fullRevolutions: full.length, agreeMeanMm: agreeMean, agreeMaxMm: agreeMax, minHoleGap: minGap, tooFast, discardedFrames: discarded },
