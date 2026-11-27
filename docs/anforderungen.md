@@ -40,7 +40,7 @@ Alle Werte werden am Zweitgerät in einem Dialog eingestellt und im Browser gesp
 | K5 | **Messbereiche** (Flanken, Hornspitzen, Referenz, Lochfenster) interaktiv aufziehen. Dazu zeigt das Zweitgerät während der Einrichtung **ein Standbild vom Handy** (bei Bedarf alle paar Sekunden aktualisiert). | MUSS |
 | K6 | Kamera-Orientierung: Hoch- oder Querformat, gespiegelt | MUSS |
 | K7 | Toleranz, ab der eine Maßnahme vorgeschlagen wird; zugleich Abbruchkriterium. Standard **Seite ±0,2 mm, Höhe ±0,3 mm**. | MUSS |
-| K8 | Anzahl der Maßnahmen pro Durchgang N (Standard 3 je Seite) | MUSS |
+| K8 | Maßnahmen pro Durchgang: alle Speichen, deren Drehung nach dem Modell mindestens ⅛ Umdrehung beträgt (Einflussmodell, siehe README) | MUSS |
 | K9 | Faktor „Nippelumdrehungen je mm“, getrennt für Seite und Höhe, mit Modus „manuell“ oder „auto“ (siehe Abschnitt 8) | MUSS |
 | K10 | Laufrad-Profile speichern und laden (alle Werte inklusive gelernter Faktoren) | KANN |
 
@@ -73,7 +73,7 @@ Vorgehen nach Werkstattpraxis (Park Tool, BIKE24).
 | ID | Anforderung | Stufe |
 |---|---|---|
 | Z1 | Ablauf in **Phasen**: 1) Seitenschlag grob, 2) Höhenschlag (paarweise) mit Kontrolle des Seitenschlags, 3) Hinweis zum Abdrücken des Rads, 4) Feinzentrieren beider Achsen. Die App zeigt die aktuelle Phase an. | MUSS |
-| Z2 | Pro Durchgang werden die **N größten Abweichungen je Seite** behandelt (K8), größte zuerst. | MUSS |
+| Z2 | Pro Durchgang werden die Drehungen aller Speichen aus dem Einflussmodell berechnet (K8), größte zuerst; breite Auslenkungen werden im Verbund mehrerer Speichen behoben. | MUSS |
 | Z3 | Höhenkorrekturen werden **paarweise** an benachbarten Speichen beider Seiten gleich stark vorgegeben, damit kein neuer Seitenschlag entsteht. | MUSS |
 | Z4 | Seiten- und Höhenkorrektur für denselben Nippel werden zu **einer** Anweisung zusammengefasst. | MUSS |
 | Z5 | Anweisungsformat: Speichennummer, Seite, Richtung (anziehen/lösen), Umdrehungen in **⅛-Schritten**, z. B. „Speiche 3 und 5 (Antriebsseite) je ¼ Umdrehung anziehen“. | MUSS |

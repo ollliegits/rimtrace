@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSetup, findEdges, parseSetup, recommend, spokeSide, type SpokeProfile } from '../src/core';
+import { defaultSetup, findEdges, parseSetup, recommend, spokeSide, truingPlan, type SpokeProfile } from '../src/core';
 
 describe('findEdges', () => {
   it('liefert Subpixel-Position einer antialiasten Stufe', () => {
@@ -51,5 +51,37 @@ describe('parseSetup', () => {
     expect(() => parseSetup('{"xRead2": 1}')).toThrow(/Unbekannt/);
     expect(() => parseSetup('{"xRead": "5"}')).toThrow(/Typ/);
     expect(() => parseSetup('{"flankRows": [1]}')).toThrow(/Typ/);
+  });
+});
+
+describe('truingPlan (Einflussmodell, kleinste Fehlerquadrate)', () => {
+  const n = 28;
+  const s = { evenSpokeSide: 'left' as const };
+  const bump = (sigma: number, amp: number) =>
+    Array.from({ length: n }, (_, j) => amp * Math.exp(-(Math.min(Math.abs(j - 10), n - Math.abs(j - 10)) ** 2) / (2 * sigma * sigma)));
+  const plan = (lateral: number[], height = Array(n).fill(0)) => truingPlan({ lateral, height, count: [] }, s);
+
+  it('breite Auslenkung bindet mehr Speichen ein als eine schmale', () => {
+    const narrow = plan(bump(0.6, 2));
+    const broad = plan(bump(3, 2));
+    expect(broad.widthSpokes.lateral).toBeGreaterThan(narrow.widthSpokes.lateral);
+    expect(broad.actions.length).toBeGreaterThan(narrow.actions.length);
+    expect(broad.residual.lateralMm).toBeLessThan(2);
+  });
+
+  it('Seitenschlag nach rechts: linke Speiche anziehen, rechte lösen', () => {
+    const a = plan(bump(2, 2)).actions;
+    expect(a.find((x) => x.spoke === 10)?.verb).toBe('tighten'); // gerade = links
+    expect(a.find((x) => x.spoke === 11)?.verb).toBe('loosen');
+  });
+
+  it('Höhe: Hochstelle wird nur dort angezogen, der Rest bleibt unberührt', () => {
+    const a = plan(Array(n).fill(0), bump(2, 2)).actions;
+    expect(a.length).toBeGreaterThan(1);
+    expect(a.every((x) => x.verb === 'tighten' && Math.abs(x.spoke - 10) <= 4)).toBe(true);
+  });
+
+  it('alles innerhalb der Toleranz → keine Maßnahme', () => {
+    expect(plan(bump(2, 0.1)).actions).toEqual([]);
   });
 });

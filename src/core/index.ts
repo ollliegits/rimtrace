@@ -16,3 +16,4 @@ export * from './sdp';
 export * from './session';
 export * from './setup';
 export * from './silhouette';
+export * from './truing';

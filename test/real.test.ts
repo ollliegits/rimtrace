@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { AnalysisSession, defaultRealSetup, orientCrop, parseSetup, RealAnalyzer, realSetupError, spokeSides, recommend, describe as describeAction, type RealProfile } from '../src/core';
+import { AnalysisSession, defaultRealSetup, orientCrop, parseSetup, RealAnalyzer, realSetupError, spokeSides, truingPlan, describeTruing, type RealProfile } from '../src/core';
 import { readVideoGray } from './support/videoReader';
 
 const finite = (a: number[]) => a.filter(Number.isFinite);
@@ -46,7 +46,7 @@ describe.runIf(existsSync('videos/IMG_0977.MOV'))('real-0977: Umdrehung 1 gegen 
     console.log(
       table('real-0977', r.profile, r.setup.spokes),
       `\nU1 gegen U2: Seite mittlere Abw. ${avg(diffLat).toFixed(2)} mm, größte ${max(diffLat).toFixed(2)} mm; Höhe mittlere ${avg(diffH).toFixed(2)} mm, größte ${max(diffH).toFixed(2)} mm`,
-      `\nTop 3: ${recommend(r.profile.all, spokeSides(r.setup)).map((a) => describeAction(a)).join(' | ')}`,
+      `\nMaßnahmen: ${truingPlan(r.profile.all, spokeSides(r.setup)).actions.map((a) => describeTruing(a)).join(' | ')}`,
     );
   });
 

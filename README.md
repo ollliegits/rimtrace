@@ -5,7 +5,7 @@ Webapp-PoC (iPhone/Safari) für die **kontinuierliche Messung von Seiten- und H�
 - Verschiebung links/rechts = Seitenschlag, oben/unten = Höhenschlag, beide relativ zu einer festen Referenzkante
 - Maßstab: jedes Bild neu aus der bekannten Felgenaußenbreite (Selbstkalibrierung)
 - Drehwinkel aus der Markerspur: eine Marke pro Speiche, Doppelmarke am Ventil als Nullpunkt, linear interpoliert
-- Ergebnis: Profil je Speiche (Median über mehrere Umdrehungen) und Top-3-Maßnahmen
+- Ergebnis: Profil je Speiche (Median über mehrere Umdrehungen) und Maßnahmen
 
 **Stand: Stufe 4 (MVP).** Zwei Analysepfade: der synthetische (Generator mit Ground Truth, Markerspur) und der für **echte Aufnahmen** (Felge von oben im Bild, Löcher als Speichentakt, Ventilloch bzw. Aufkleber als Nullpunkt). Neu: Live-Messung mit der iPhone-Kamera (Web Worker), Kopplung Handy ↔ Notebook per WebRTC mit QR-Codes ohne Vermittlungsserver, Steuerung am Notebook.
 
@@ -29,7 +29,8 @@ src/core/       reine Funktionen auf Graustufenbildern (Uint8Array + Breite/Höh
   measure.ts      Seiten-/Höhenschlag relativ zur Referenzkante, mm über Felgenbreite
   marks.ts        Marken, Doppelmarke, Drehwinkel (PhaseTracker mit tooFast-Erkennung)
   aggregate.ts    Median je Speichenposition über mehrere Umdrehungen
-  recommend.ts    Faustregel-Empfehlung, Top-3
+  recommend.ts    Faustregel-Empfehlung (Stufe 1, Generator/Dev-Seite)
+  truing.ts       Einflussmodell + kleinste Fehlerquadrate: Drehung je Speiche, auch für breite Auslenkungen
   analyzer.ts     verbindet alles, Bild für Bild
   setup.ts        Felgen-/Bildgeometrie, parseSetup (JSON)
   silhouette.ts   Flanken, Hornspitzen, Oberkanten mit Subpixel-Genauigkeit (echte Aufnahmen)
@@ -84,7 +85,9 @@ Aufbau der Aufnahme: Hochformat, Felge hängt von oben ins Bild, helle Fläche d
 
 - Seitenschlag = Felgenmitte (aus den Flanken) minus Referenz, Höhenschlag = mittlere Hornspitze minus Oberkante der Referenz; Maßstab = bekannte Felgenbreite / gemessene Breite (Median über das ganze Video).
 - Drehposition: Das Fenster `holeWindow` oberhalb der Hornspitzen liegt in der Felgenmitte; jedes Speichenloch (Helligkeitseinbruch) ist ein Takt, der helle Aufkleber der Nullpunkt (Loch 0 = erstes Loch danach). Löcher vor dem ersten Aufkleber werden rückwärts nummeriert (Umdrehung 0, nur Teil).
-- Pro Speiche und Umdrehung der Median der Bilder um das Loch (± `binHalfWidth` Lochabstand), zentriert; „Median alle“ über alle Umdrehungen. Die Top-3-Maßnahmen (Faustregel aus Stufe 1) beruhen auf „alle“.
+- Pro Speiche und Umdrehung der Median der Bilder um das Loch (± `binHalfWidth` Lochabstand), zentriert; „Median alle“ über alle Umdrehungen. Die Maßnahmen beruhen auf „alle“ (nur volle Umdrehungen).
+
+**Maßnahmen (`src/core/truing.ts`):** Eine Nippeldrehung wirkt als Glocke (σ = 2 Speichen) auf die Nachbarspeichen; seitlich zur Flanschseite der Speiche, in der Höhe zur Nabe. Aus Seiten- und Höhenschlag (Bezug: Median) werden die Drehungen aller Speichen per regularisierter kleinster Quadrate berechnet (je auf die Toleranz bezogen), mit 60 % angesetzt, auf ⅛ gerundet, höchstens ½ je Speiche, Drehungen unter 0,1 weggelassen. Breite Auslenkungen ergeben so viele kleine Drehungen im Verbund, schmale wenige größere. Angezeigt werden außerdem die Breite der Auslenkung und die erwartete Restabweichung. **Die Modellwerte (1 mm/Umdr. seitlich, 0,5 mm/Umdr. Höhe, σ) sind Annahmen** (Größenordnung aus US 5 103 414) und noch nicht am echten Rad kalibriert; nach jedem Durchgang neu messen.
 
 **Bedienung:** `npm run dev`, „Auswertung: echte Aufnahme“ wählen, Videodatei laden (die Standardwerte passen zu `IMG_0977`, dazu `rimWidthMm` eintragen). Das Setup-JSON darunter enthält alle Messbereiche in Videopixeln; das Overlay (Flankenzeilen, Hornspitzen, Referenz, Lochfenster) folgt der Eingabe live, gespeichert wird im `localStorage` (`rimtrace.realsetup.v1`). Teil-JSON ergänzt die Standardwerte (außer `rimWidthMm`, das immer eingetragen werden muss; solange es fehlt, wird nicht ausgewertet), `spokes` (Standard 28) stellt die Speichenzahl ein. Eine Änderung von `crop` startet das Video neu, andere Änderungen werten ab dem nächsten Bild neu aus („Zurücksetzen“ startet von vorn). Für jedes Video braucht es eigene Messbereiche; Beispiele in `test/real/*.json`. Videos liegen in `videos/` (nicht eingecheckt); die `real-*`-Tests überspringen sich ohne Datei.
 
@@ -115,7 +118,7 @@ Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet
 3. Den Antwort-QR vom iPhone-Bildschirm vor die Notebook-Webcam halten (oder Text einfügen). Beide Seiten zeigen „verbunden“. Notieren: Kandidatenpaar (Diagnose) und ob QR-Scan funktionierte.
 4. In der Steuerung Felgenbreite (mm), Speichenzahl, Nullpunkt, Seiten eintragen und „Übernehmen und senden“.
 5. „Standbild vom Handy holen“: Das Bild erscheint mit Overlay; Messbereiche im JSON anpassen, bis sie passen.
-6. Start, Rad mindestens 2 volle Runden in Fahrtrichtung drehen, Stopp. Ein Ergebnisdiagramm 1…N mit je einer Kurve pro Umdrehung, die Prüfung und die Top-3-Maßnahmen erscheinen.
+6. Start, Rad mindestens 2 volle Runden in Fahrtrichtung drehen, Stopp. Ein Ergebnisdiagramm 1…N mit je einer Kurve pro Umdrehung, die Prüfung und die Maßnahmen erscheinen.
 7. Diagnose am Handy ablesen: Auflösung und Bildrate laut `getSettings()`, gemessene Bildrate, Rechenzeit Mittel/p95, verworfene Bilder, Lochzustand, QR-Version.
 
 ### Annahmen des Generators
