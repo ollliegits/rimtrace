@@ -111,6 +111,13 @@ Das Handy wertet aus (Kamera → Ausschnitt in Graustufen → Worker) und sendet
 
 **Stromversorgung:** Das Handy muss während der Messung am Ladegerät hängen. Kamera und Auswertung verbrauchen viel Strom, und der Bildschirm kann sich abschalten, wenn der Akku spart.
 
+**Messbereiche einstellen** (am Standbild; die Felge dabei in der ungünstigsten Lage betrachten, also bei starkem Eiern an den Rändern des Ausschlags; 1 mm ≈ 4 px bei 0,24 mm/px):
+
+- **Felge (gelb):** Beide Seiten der Felge brauchen im Rahmen einen hellen Rand, auch bei größtem Seitenschlag (sonst „Felge nicht erkannt“). Breit genug ziehen, mindestens Felgenbreite plus 2 × Ausschlag plus Rand. Oben mindestens 50 px über die Hornspitzen (dort werden die Flanken gemessen), unten knapp unter die tiefsten Hornspitzen inklusive Höhenschlag. Darunter darf kein anderes Dunkles im Rahmen liegen (Speichen, Nippel, Hand).
+- **Referenz (grün):** Die feste Referenzspeiche mit Nippelkopf vollständig, mit hellem Rand links und rechts. Oberkante des Rahmens in der hellen Fläche über dem Nippelkopf. Die Felge darf auch bei größtem Ausschlag nicht in den Rahmen hineinragen, sonst wird sie als Referenz gemessen. Unterhalb der Nippelkopf-Oberkante braucht der Ausschnitt mindestens 70 px.
+- **Bettstreifen (blau):** Nur Felgenbett mit seinen Löchern, schmal und mittig. Der Streifen muss auch bei größtem Seitenschlag und Höhenschlag vollständig im Felgenbett bleiben: Breite höchstens Felgenbreite minus 2 × Ausschlag (in px). Höhe: über die Zone, in der die Löcher durchlaufen (ca. 120 px über den Hornspitzen, ±40 px); weder Flanken noch Hornspitzen.
+- **Ausschnitt (rot):** Muss alle drei anderen Rahmen enthalten (wird geprüft), oben mindestens 135 px über den Hornspitzen (Lochfenster), unten mindestens 70 px unter dem Nippelkopf der Referenz. Nicht größer als nötig, aber mit Luft für das Eiern.
+
 **Testcheckliste (iPhone ↔ Notebook):**
 
 1. `npm run dev:https` am Notebook, `control.html` öffnen, Webcam freigeben, „Kopplung starten“.
