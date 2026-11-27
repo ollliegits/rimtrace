@@ -43,6 +43,9 @@ export interface RealProfile {
   markers: number[];
   /** Erkannte Löcher (Bildnummer, Umdrehung, Speichenindex) zur Fehlersuche bei der Nummerierung. */
   holes: { frame: number; rev: number; k: number }[];
+  /** Rohereignisse der Lochfenster-Erkennung (Richtung 0 = ohne Durchgang) und Bettweg je Bild in px, zur Fehlersuche. */
+  events: { kind: string; frame: number; dir: number; size: number }[];
+  shifts: string;
 }
 
 /** Prüfergebnis der Messung: `messages` leer heißt, die Messung ist plausibel. */
@@ -287,6 +290,8 @@ export class RealAnalyzer {
       holesPerRev,
       markers,
       holes: holes.map((h) => ({ frame: Math.round(h.frame * 10) / 10, rev: h.rev, k: h.k })),
+      events: this.numEvents.map((e) => ({ kind: e.kind, frame: Math.round(e.frame * 10) / 10, dir: e.dir, size: Math.round(e.size) })),
+      shifts: this.shifts.map((d) => (Number.isFinite(d) ? (Math.round(d * 10) / 10).toString() : '-')).join(' '),
     };
   }
 
