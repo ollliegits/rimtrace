@@ -41,6 +41,8 @@ export interface RealProfile {
   /** Verschiedene Löcher je Umdrehung (Soll: Speichenzahl) und Bildnummern der Nullpunkte (Ventil bzw. Aufkleber). */
   holesPerRev: number[];
   markers: number[];
+  /** Erkannte Löcher (Bildnummer, Umdrehung, Speichenindex) zur Fehlersuche bei der Nummerierung. */
+  holes: { frame: number; rev: number; k: number }[];
 }
 
 /** Prüfergebnis der Messung: `messages` leer heißt, die Messung ist plausibel. */
@@ -284,6 +286,7 @@ export class RealAnalyzer {
       all: toProfile(merge(lat), merge(hei)),
       holesPerRev,
       markers,
+      holes: holes.map((h) => ({ frame: Math.round(h.frame * 10) / 10, rev: h.rev, k: h.k })),
     };
   }
 
